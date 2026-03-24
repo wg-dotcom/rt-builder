@@ -429,7 +429,20 @@ let generatedHTML = '';
 // Format numbers with commas: 4000 → "4,000", "$2500/mo" → "$2,500/mo"
 function fmtNum(str) {
   if (!str) return str;
-  return String(str).replace(/\d{4,}/g, n => Number(n).toLocaleString('en-US'));
+  let s = String(str).replace(/\.0+$/, '');
+  return s.replace(/\d{4,}/g, n => Number(n).toLocaleString('en-US'));
+}
+function fmtSalary(str) {
+  if (!str) return '';
+  let s = String(str).replace(/\.0+$/, '').replace(/,/g, '').trim();
+  const num = s.match(/[\d,]+/);
+  if (!num) return fmtNum(s);
+  const formatted = Number(num[0].replace(/,/g, '')).toLocaleString('en-US');
+  if (s.includes('$') && s.toLowerCase().includes('/mo')) return fmtNum(s);
+  let result = s.includes('$') ? '' : '$';
+  result += formatted;
+  if (!s.toLowerCase().includes('/mo') && !s.toLowerCase().includes('month') && !s.toLowerCase().includes('yr') && !s.toLowerCase().includes('year')) result += '/mo';
+  return result;
 }
 
 // Anthropic API key (obfuscated)
@@ -1141,7 +1154,7 @@ function updateCandidateList() {
     <div class="candidate-item">
       <div>
         <div class="name">${c.name} ${c.tap ? '<span style="color:var(--orange)">★ TAP</span>' : ''} ${c.recruiterNote ? '<span style="color:var(--green);font-size:11px;">✓ AI</span>' : ''}</div>
-        <div class="meta">${c.location || 'Location TBD'} · ${c.experience || 'Exp TBD'} · ${fmtNum(c.salary) || 'Salary TBD'}</div>
+        <div class="meta">${c.location || 'Location TBD'} · ${c.experience || 'Exp TBD'} · ${fmtSalary(c.salary) || 'Salary TBD'}</div>
       </div>
       <button class="remove-btn" onclick="removeCandidate(${i})">&times;</button>
     </div>
@@ -1538,7 +1551,7 @@ function generateCandidateCard(c, idx, v) {
             </div>
           </div>
           <div class="card-rate">
-            <div class="card-rate-amount">${escHTML(fmtNum(c.salary || v.salaryRange) || 'TBD')}</div>
+            <div class="card-rate-amount">${escHTML(fmtSalary(c.salary || v.salaryRange) || 'TBD')}</div>
             <div class="card-rate-period">USD / Month</div>
           </div>
         </div>
@@ -1927,7 +1940,7 @@ function generateComparisonTable(cands, v) {
             const top3 = sk.split(',').slice(0, 4).map(s => s.trim()).filter(Boolean).join(', ');
             return '<td>' + escHTML(top3 || 'See profile') + '</td>';
           }).join('')}</tr>
-          <tr><td><strong>Rate</strong></td>${cands.map(c => `<td>${escHTML(fmtNum(c.salary || v.salaryRange) || 'TBD')}</td>`).join('')}</tr>
+          <tr><td><strong>Rate</strong></td>${cands.map(c => `<td>${escHTML(fmtSalary(c.salary || v.salaryRange) || 'TBD')}</td>`).join('')}</tr>
           <tr><td><strong>TAP</strong></td>${cands.map(c => `<td>${c.tap ? '<span style="color:var(--primary);font-weight:700;">Yes ★</span>' : 'No'}</td>`).join('')}</tr>
         </tbody>
       </table>
