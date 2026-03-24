@@ -434,15 +434,19 @@ function fmtNum(str) {
 }
 function fmtSalary(str) {
   if (!str) return '';
-  let s = String(str).replace(/\.0+$/, '').replace(/,/g, '').trim();
-  const num = s.match(/[\d,]+/);
-  if (!num) return fmtNum(s);
-  const formatted = Number(num[0].replace(/,/g, '')).toLocaleString('en-US');
-  if (s.includes('$') && s.toLowerCase().includes('/mo')) return fmtNum(s);
-  let result = s.includes('$') ? '' : '$';
-  result += formatted;
-  if (!s.toLowerCase().includes('/mo') && !s.toLowerCase().includes('month') && !s.toLowerCase().includes('yr') && !s.toLowerCase().includes('year')) result += '/mo';
-  return result;
+  let s = String(str).replace(/\.0+$/g, '').trim();
+  const hasDollar = s.includes('$');
+  const hasPeriod = /\/(mo|month|yr|year)/i.test(s) || /month|year/i.test(s);
+  const rangeMatch = s.match(/(\$?\s*[\d,]+)\s*[-–—]\s*(\$?\s*[\d,]+)/);
+  if (rangeMatch) {
+    const low = Number(rangeMatch[1].replace(/[$,\s]/g, '')).toLocaleString('en-US');
+    const high = Number(rangeMatch[2].replace(/[$,\s]/g, '')).toLocaleString('en-US');
+    return '$' + low + ' - $' + high + (hasPeriod ? '' : '/mo');
+  }
+  const nums = s.match(/[\d,]+/g);
+  if (!nums) return s;
+  const formatted = Number(nums[0].replace(/,/g, '')).toLocaleString('en-US');
+  return (hasDollar ? '' : '$') + formatted + (hasPeriod ? '' : '/mo');
 }
 
 // Anthropic API key (obfuscated)
