@@ -1334,8 +1334,8 @@ function buildPresentationHTML() {
     .ctag { font-size: 12px; padding: 6px 14px; border-radius: 6px; background: var(--bg-subtle); color: var(--text-mid); }
     .ctag-key { background: ${v.colorPrimary}1a; color: var(--primary); font-weight: 600; }
     .fit-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-    .fit-item { background: var(--bg-subtle); padding: 14px 16px; border-radius: 8px; border: 1px solid var(--border-strong); }
-    .fit-label { font-size: 12px; color: var(--text-mid); line-height: 1.5; }
+    .fit-item { background: var(--bg-subtle); padding: 14px 16px; border-radius: 8px; border: 1px solid var(--border-strong); overflow: visible; word-wrap: break-word; }
+    .fit-label { font-size: 12px; color: var(--text-mid); line-height: 1.5; display: block; overflow: visible; white-space: normal; }
     .strength-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; }
     .bar-item { display: flex; flex-direction: column; gap: 6px; }
     .bar-label { font-size: 13px; color: var(--text-mid); }
@@ -1595,7 +1595,7 @@ function generateCandidateCard(c, idx, v) {
           <div class="fit-grid">
             ${strengthBullets.slice(0, 3).map(s => `
             <div class="fit-item">
-              <div class="fit-label">${escHTML(s.length > 50 ? s.slice(0, 50) + '...' : s)}</div>
+              <div class="fit-label">${escHTML(s)}</div>
             </div>`).join('')}
           </div>` : ''}
 
