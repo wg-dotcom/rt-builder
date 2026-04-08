@@ -1813,7 +1813,8 @@ async function fetchResumeContent(url) {
     normalizedUrl.includes('s3.') || normalizedUrl.includes('s3-') ||
     normalizedUrl.includes('drive.google.com/uc') ||
     normalizedUrl.includes('fillout') || normalizedUrl.includes('dropbox') ||
-    normalizedUrl.includes('r2.dev') || normalizedUrl.includes('blob.core');
+    normalizedUrl.includes('r2.dev') || normalizedUrl.includes('blob.core') ||
+    normalizedUrl.includes('airtableusercontent.com') || normalizedUrl.includes('dl.airtable.com');
 
   if (isPDFLikely) {
     try {
