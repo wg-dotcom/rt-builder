@@ -2090,7 +2090,10 @@ async function autoDeploy() {
       }
     } catch(e) {}
 
-    // 4. Generate HTML — merge if multi-batch, otherwise fresh
+    // 4a. Extract real resume data BEFORE building cards
+    await generateResumeData();
+
+    // 4b. Generate HTML — merge if multi-batch, otherwise fresh
     if (existingHTML && parseInt(v.batchNumber) > 1) {
       showToast(`Merging Batch ${v.batchNumber} into existing page...`, 'loading');
       generatedHTML = mergeBatchIntoExisting(existingHTML, candidates, v);
@@ -2118,41 +2121,6 @@ async function autoDeploy() {
       body: JSON.stringify(putBody)
     });
     if (!pushResp.ok) { throw new Error((await pushResp.json()).message || 'Failed to push file'); }
-
-    // 5b. Generate and push branded resume pages for each candidate
-    showToast(`Generating branded resumes for ${candidates.length} candidates...`, 'loading');
-
-    // Generate resume data via AI if not already done
-    await generateResumeData();
-
-    for (let i = 0; i < candidates.length; i++) {
-      const c = candidates[i];
-      const resumeFilename = `resume-${(c.name.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '') || String(idx + 1))}.html`;
-      showToast(`Pushing resume ${i + 1}/${candidates.length}: ${c.name}...`, 'loading');
-
-      const resumeHTML = buildResumeHTML(c, v);
-      const resumeContent = btoa(unescape(encodeURIComponent(resumeHTML)));
-
-      // Check if resume file already exists (get SHA)
-      let resumeSha = null;
-      try {
-        const rc = await fetch(`https://api.github.com/repos/${GH_ORG}/${repo}/contents/${resumeFilename}`, {
-          headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
-        });
-        if (rc.ok) { const rd = await rc.json(); resumeSha = rd.sha; }
-      } catch(e) {}
-
-      const resumePut = { message: `Add branded resume: ${c.name}`, content: resumeContent };
-      if (resumeSha) resumePut.sha = resumeSha;
-
-      try {
-        await fetch(`https://api.github.com/repos/${GH_ORG}/${repo}/contents/${resumeFilename}`, {
-          method: 'PUT',
-          headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-          body: JSON.stringify(resumePut)
-        });
-      } catch(e) { console.error(`Failed to push resume for ${c.name}:`, e); }
-    }
 
     // 6. Enable GitHub Pages
     try {
@@ -2305,8 +2273,10 @@ You MUST use a completely different angle, different sommelier term, and differe
 
 KEEP IT TIGHT: "why" = exactly 3-5 SHORT bullets separated by \\n. Each bullet is ONE line, max 15 words. Start with a specific fact (tool, number, cert). "note" = 2-3 sentences MAX (under 60 words). No rambling. No filler.
 
-Return ONLY valid JSON. No markdown fences. No explanation before or after. Fill in REAL content for this candidate, do NOT use placeholder text.
-{"why":"Heavily certified Microsoft specialist: AZ-900, MS-900, AZ-104 in progress\\nLives in the exact DIS environment: remote ticket management, M365 admin daily\\nHandles 50+ tickets/week at current MSP. The bread-and-butter issues eating your time\\n4 years IT support across 2 MSPs. Knows the pace and the tools\\nStrong communicator. Clients at current role rate him 4.8/5 satisfaction","note":"Menard is the sleep easy at night hire in this batch. MSP background means he knows the pace, the tools, the client expectations. Minimal ramp-up. Solid all-rounder who can carry the load from day one.","experience":"4 yrs IT Support","skills":"Azure, M365, ServiceNow, Active Directory, PowerShell, ITIL","jobs":[{"role":"Service Desk Engineer","company":"Datacom MSP","dates":"Mar 2023 - Present"},{"role":"IT Support Specialist","company":"TechCorp SA","dates":"Jan 2021 - Feb 2023"}]}
+CRITICAL: ONLY reference facts that appear in the candidate's resume data or spreadsheet info provided above. Do NOT invent companies, job titles, certifications, or metrics. If you don't have specific data, keep bullets general but honest.
+
+Return ONLY valid JSON. No markdown fences. No explanation before or after. Only these 4 fields: why, note, experience, skills.
+{"why":"Heavily certified Microsoft specialist: AZ-900, MS-900, AZ-104 in progress\\nLives in the exact DIS environment: remote ticket management, M365 admin daily\\nHandles 50+ tickets/week at current MSP. The bread-and-butter issues eating your time\\n4 years IT support across 2 MSPs. Knows the pace and the tools\\nStrong communicator. Clients at current role rate him 4.8/5 satisfaction","note":"Menard is the sleep easy at night hire in this batch. MSP background means he knows the pace, the tools, the client expectations. Minimal ramp-up. Solid all-rounder who can carry the load from day one.","experience":"4 yrs IT Support","skills":"Azure, M365, ServiceNow, Active Directory, PowerShell, ITIL"}
 
 IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW content specific to THIS candidate (${c.name}). Use their actual skills, experience, and background. Do NOT copy the example text.`;
 
@@ -2361,14 +2331,6 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
         if (parsed.note) c.recruiterNote = parsed.note.length > 400 ? parsed.note.slice(0, 400).replace(/\s+\S*$/, '...') : parsed.note;
         if (parsed.experience) c.experience = parsed.experience;
         if (parsed.skills) c.skills = parsed.skills;
-        if (parsed.jobs && Array.isArray(parsed.jobs)) {
-          if (!c.resumeData) c.resumeData = {};
-          c.resumeData.experience = parsed.jobs.map(j => ({
-            role: j.role || '',
-            company: j.company || '',
-            dates: j.dates || ''
-          }));
-        }
         successCount++;
       }
 
