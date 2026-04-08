@@ -2173,6 +2173,10 @@ async function generateAINotes() {
   btn.disabled = true;
   btn.innerHTML = '⏳ Generating...';
 
+  // Extract resume data FIRST so sommelier has real content to work with
+  showAIStatus('loading', 'Reading resumes before writing notes...');
+  await generateResumeData();
+
   let successCount = 0;
 
   // Fetch client website content for richer context (skip if slow, don't block notes)
@@ -2247,6 +2251,8 @@ Name: ${c.name} | Location: ${c.location || '?'} | Salary: ${c.salary || '?'}/mo
 ${c.experience ? 'Experience: ' + c.experience : ''} ${c.skills ? '| Skills: ' + c.skills : ''}
 ${c.resumeLink ? 'Resume: ' + c.resumeLink : ''}
 ${c.summary ? 'Raw notes: ' + c.summary.slice(0, 500) : ''}
+${c.resumeData?.experience?.length ? 'VERIFIED RESUME DATA (use ONLY these facts for job history):\n' + c.resumeData.experience.map(e => `- ${e.role} at ${e.company} (${e.dates || '?'})${e.description ? ': ' + e.description.split('\n')[0] : ''}`).join('\n') : 'NOTE: Resume could not be accessed. Use ONLY the spreadsheet info above. Do NOT invent job titles or companies.'}
+${c.resumeData?.skillCategories?.length ? 'VERIFIED SKILLS: ' + c.resumeData.skillCategories.map(sc => sc.skills).join(', ') : ''}
 
 EXAMPLE OF EXACTLY WHAT I WANT (study the rhythm, specificity, and sommelier flair):
 
@@ -2273,10 +2279,11 @@ You MUST use a completely different angle, different sommelier term, and differe
 
 KEEP IT TIGHT: "why" = exactly 3-5 SHORT bullets separated by \\n. Each bullet is ONE line, max 15 words. Start with a specific fact (tool, number, cert). "note" = 2-3 sentences MAX (under 60 words). No rambling. No filler.
 
-CRITICAL: ONLY reference facts that appear in the candidate's resume data or spreadsheet info provided above. Do NOT invent companies, job titles, certifications, or metrics. If you don't have specific data, keep bullets general but honest.
+CRITICAL: ONLY reference facts that appear in the VERIFIED RESUME DATA or spreadsheet info above. Do NOT invent companies, job titles, certifications, or metrics. If you don't have specific data, keep bullets general but honest.
 
-Return ONLY valid JSON. No markdown fences. No explanation before or after. Only these 4 fields: why, note, experience, skills.
-{"why":"Heavily certified Microsoft specialist: AZ-900, MS-900, AZ-104 in progress\\nLives in the exact DIS environment: remote ticket management, M365 admin daily\\nHandles 50+ tickets/week at current MSP. The bread-and-butter issues eating your time\\n4 years IT support across 2 MSPs. Knows the pace and the tools\\nStrong communicator. Clients at current role rate him 4.8/5 satisfaction","note":"Menard is the sleep easy at night hire in this batch. MSP background means he knows the pace, the tools, the client expectations. Minimal ramp-up. Solid all-rounder who can carry the load from day one.","experience":"4 yrs IT Support","skills":"Azure, M365, ServiceNow, Active Directory, PowerShell, ITIL"}
+Return ONLY valid JSON. No markdown fences. No explanation before or after.
+- "jobs" field: Copy ONLY from VERIFIED RESUME DATA above. If no verified data, return empty array []. NEVER invent jobs.
+{"why":"Heavily certified Microsoft specialist: AZ-900, MS-900, AZ-104 in progress\\nLives in the exact DIS environment: remote ticket management, M365 admin daily\\nHandles 50+ tickets/week at current MSP. The bread-and-butter issues eating your time\\n4 years IT support across 2 MSPs. Knows the pace and the tools\\nStrong communicator. Clients at current role rate him 4.8/5 satisfaction","note":"Menard is the sleep easy at night hire in this batch. MSP background means he knows the pace, the tools, the client expectations. Minimal ramp-up. Solid all-rounder who can carry the load from day one.","experience":"4 yrs IT Support","skills":"Azure, M365, ServiceNow, Active Directory, PowerShell, ITIL","jobs":[{"role":"Service Desk Engineer","company":"Datacom MSP","dates":"Mar 2023 - Present"},{"role":"IT Support Specialist","company":"TechCorp SA","dates":"Jan 2021 - Feb 2023"}]}
 
 IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW content specific to THIS candidate (${c.name}). Use their actual skills, experience, and background. Do NOT copy the example text.`;
 
@@ -2331,6 +2338,17 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
         if (parsed.note) c.recruiterNote = parsed.note.length > 400 ? parsed.note.slice(0, 400).replace(/\s+\S*$/, '...') : parsed.note;
         if (parsed.experience) c.experience = parsed.experience;
         if (parsed.skills) c.skills = parsed.skills;
+        // Only use AI jobs as fallback when resume extraction didn't get experience
+        if (parsed.jobs && Array.isArray(parsed.jobs) && parsed.jobs.length > 0) {
+          if (!c.resumeData?.experience?.length) {
+            if (!c.resumeData) c.resumeData = {};
+            c.resumeData.experience = parsed.jobs.map(j => ({
+              role: j.role || '',
+              company: j.company || '',
+              dates: j.dates || ''
+            }));
+          }
+        }
         successCount++;
       }
 
