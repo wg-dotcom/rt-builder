@@ -1614,6 +1614,14 @@ function generateCandidateCard(c, idx, v) {
             ${c.tap ? `<a class="video-intro-btn" href="https://drive.google.com/file/d/1lvb0EWiOoIzbKKFGXN0IiuDjdGYOZdHC/view" target="_blank"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>TAP Info</a>` : ''}
           </div>
         </div>
+
+        ${c.detailedNote ? `
+        <div class="card-footer">
+          <div class="card-recruiter-note">
+            <div class="recruiter-note-title">Recruiter Note</div>
+            <p>${escHTML(c.detailedNote)}</p>
+          </div>
+        </div>` : ''}
       </div>
     </div>`;
 }
@@ -1881,12 +1889,12 @@ async function extractResumeFromPDF(pdfBlob, candidateName, roleTitle) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
+      max_tokens: 3000,
       messages: [{
         role: 'user',
         content: [
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
-          { type: 'text', text: 'Extract ALL content from this resume for ' + candidateName + ' (applying for ' + roleTitle + '). Copy EVERYTHING exactly as written. Do not summarize, skip, or invent anything.\n\nCRITICAL RULES:\n- ONLY include information that is EXPLICITLY written in the resume. Do NOT infer, guess, or fabricate any details.\n- If a section is not present in the resume, return an empty array for that field.\n- Copy job titles, company names, dates, and bullet points VERBATIM. Do not rephrase or enhance them.\n- If text is garbled or unreadable, skip it rather than guessing what it says.\n- NEVER invent skills, certifications, companies, or experience that are not clearly stated in the document.\n\nReturn ONLY valid JSON (no markdown, no code fences):\n{"summary":"Copy their professional summary/objective VERBATIM if present. If not present, return empty string. Do NOT write one yourself.","skillCategories":[{"category":"Category Name","skills":"Skill 1, Skill 2, Skill 3"}],"experience":[{"role":"Exact Job Title","company":"Exact Company Name","dates":"Exact dates as written","description":"Copy ALL bullet points from this role VERBATIM. Separate each bullet with a newline character."}],"education":[{"degree":"Exact Degree","school":"Exact School Name","year":"Year"}],"certifications":["Exact cert names"],"languages":[{"name":"Language","level":"Level"}]}' }
+          { type: 'text', text: 'Extract ALL content from this resume for ' + candidateName + ' (applying for ' + roleTitle + '). Copy EVERYTHING exactly as written. Do not summarize, skip, or invent anything.\n\nCRITICAL RULES:\n- ONLY include information that is EXPLICITLY written in the resume. Do NOT infer, guess, or fabricate any details.\n- If a section is not present in the resume, return an empty array for that field.\n- Copy job titles, company names, dates, and bullet points VERBATIM. Do not rephrase or enhance them.\n- If text is garbled or unreadable, skip it rather than guessing what it says.\n- NEVER invent skills, certifications, companies, or experience that are not clearly stated in the document.\n- For each job, include ALL bullet points and responsibilities. Include specific metrics, tools, and numbers.\n- Extract ALL languages with proficiency levels.\n- Extract ALL education entries with exact degree names, schools, and years.\n\nReturn ONLY valid JSON (no markdown, no code fences):\n{"summary":"Copy their professional summary/objective VERBATIM if present. If not present, return empty string. Do NOT write one yourself.","skillCategories":[{"category":"Category Name","skills":"Skill 1, Skill 2, Skill 3"}],"experience":[{"role":"Exact Job Title","company":"Exact Company Name","dates":"Exact dates as written","description":"Copy ALL bullet points from this role VERBATIM. Separate each bullet with a newline character."}],"education":[{"degree":"Exact Degree","school":"Exact School Name","year":"Year"}],"certifications":["Exact cert names"],"languages":[{"name":"Language","level":"Level if stated"}]}' }
         ]
       }]
     })
@@ -1919,13 +1927,13 @@ async function generateResumeData() {
         showAIStatus('loading', 'Extracting resume content for ' + c.name + '...');
         aiText = await extractResumeFromPDF(resumeContent.data, c.name, v.roleTitle);
       } else if (resumeContent?.type === 'text') {
-        // Send extracted text to AI for structuring
+        // Send extracted text to AI for structuring (use premium model for accuracy)
         showAIStatus('loading', 'Structuring resume for ' + c.name + '...');
-        const prompt = 'Extract ALL resume content for ' + c.name + ' from the text below. Copy EVERYTHING exactly as written. Do not summarize, skip, or invent anything.\n\nCRITICAL: ONLY include information EXPLICITLY present in the text. Do NOT infer, guess, or fabricate details. If something is garbled or unclear, skip it. NEVER invent skills, companies, or experience.\n\n' +
-          'RESUME TEXT:\n' + resumeContent.data + '\n\n' +
+        const prompt = 'Extract ALL resume content for ' + c.name + ' from the text below. Copy EVERYTHING exactly as written. Do not summarize, skip, or invent anything.\n\nCRITICAL RULES:\n- ONLY include information EXPLICITLY present in the text. Do NOT infer, guess, or fabricate details.\n- Copy job titles, company names, dates, and bullet points VERBATIM. Do not rephrase or enhance them.\n- If something is garbled or unclear, skip it rather than guessing.\n- NEVER invent skills, certifications, companies, or experience not clearly stated.\n- For each job, copy ALL bullet points or responsibilities listed. Include specific metrics, tools, and numbers if present.\n- Extract ALL languages listed with proficiency levels.\n- Extract ALL education entries with exact degree names, schools, and years.\n\n' +
+          'RESUME TEXT:\n' + resumeContent.data.slice(0, 8000) + '\n\n' +
           'Return ONLY valid JSON (no markdown, no code fences):\n' +
-          '{"summary":"Copy their professional summary VERBATIM if present. If not present, return empty string.","skillCategories":[{"category":"Category","skills":"Skill1, Skill2"}],"experience":[{"role":"Exact Title","company":"Exact Company","dates":"Exact dates","description":"Copy ALL bullet points VERBATIM. Separate with newlines."}],"education":[{"degree":"Degree","school":"School","year":"Year"}],"certifications":["Exact names"],"languages":[{"name":"Lang","level":"Level"}]}';
-        aiText = await callAI(prompt, 2000);
+          '{"summary":"Copy their professional summary VERBATIM if present. If not present, return empty string.","skillCategories":[{"category":"Category Name","skills":"Skill 1, Skill 2, Skill 3"}],"experience":[{"role":"Exact Job Title","company":"Exact Company Name","dates":"Exact dates as written","description":"Copy ALL bullet points VERBATIM. Separate with newlines."}],"education":[{"degree":"Exact Degree","school":"Exact School Name","year":"Year"}],"certifications":["Exact cert names"],"languages":[{"name":"Language","level":"Level if stated"}]}';
+        aiText = await callAI_premium(prompt, 3000);
       } else {
         // Resume fetch failed — use ONLY literal spreadsheet data. NO AI generation.
         // This prevents hallucinated company names, fake job titles, and invented dates.
@@ -1972,6 +1980,8 @@ async function generateResumeData() {
 function generateComparisonTable(cands, v) {
   if (cands.length === 0) return '';
 
+  const anyTap = cands.some(c => c.tap);
+
   return `
   <div class="comparison-section">
     <div class="section-label" style="padding-bottom:20px;">
@@ -1993,19 +2003,42 @@ function generateComparisonTable(cands, v) {
             if (!exp && c.summary) { const m = c.summary.match(/(\d+)\+?\s*(?:years?|yrs?)/i); if (m) exp = m[0]; }
             return '<td>' + escHTML(exp || 'See profile') + '</td>';
           }).join('')}</tr>
-          <tr><td><strong>Key Skills</strong></td>${cands.map(c => {
-            let sk = c.skills || '';
-            if (!sk && c.summary) {
-              // Try to extract tool/skill names from the first 2 bullets of summary
-              const bullets = c.summary.split('\n').slice(0, 2).join(' ');
-              const tools = bullets.match(/[A-Z][a-zA-Z+#.]+(?:\s+[A-Z][a-zA-Z+#.]+)?/g);
-              if (tools) sk = [...new Set(tools)].slice(0, 3).join(', ');
-            }
-            const top3 = sk.split(',').slice(0, 4).map(s => s.trim()).filter(Boolean).join(', ');
+          <tr><td><strong>Key Employers</strong></td>${cands.map(c => {
+            const employers = c.resumeData?.experience?.length
+              ? [...new Set(c.resumeData.experience.map(e => e.company).filter(Boolean))].slice(0, 3).join(', ')
+              : '';
+            return '<td>' + escHTML(employers || 'See profile') + '</td>';
+          }).join('')}</tr>
+          <tr><td><strong>Core Strength</strong></td>${cands.map(c => {
+            const sk = c.skills || '';
+            const top3 = sk.split(',').slice(0, 3).map(s => s.trim()).filter(Boolean).join(', ');
             return '<td>' + escHTML(top3 || 'See profile') + '</td>';
           }).join('')}</tr>
-          <tr><td><strong>Rate</strong></td>${cands.map(c => `<td>${escHTML(fmtSalary(c.salary || v.salaryRange) || 'TBD')}</td>`).join('')}</tr>
-          <tr><td><strong>TAP</strong></td>${cands.map(c => `<td>${c.tap ? '<span style="color:var(--primary);font-weight:700;">Yes ★</span>' : 'No'}</td>`).join('')}</tr>
+          <tr><td><strong>HRIS / Tools</strong></td>${cands.map(c => {
+            const sk = c.skills || '';
+            const allSkills = sk.split(',').map(s => s.trim()).filter(Boolean);
+            return '<td>' + escHTML(allSkills.slice(0, 5).join(', ') || 'See profile') + '</td>';
+          }).join('')}</tr>
+          <tr><td><strong>Languages</strong></td>${cands.map(c => {
+            const langs = c.resumeData?.languages?.length
+              ? c.resumeData.languages.map(l => l.name).join(', ')
+              : '';
+            return '<td>' + escHTML(langs || 'English') + '</td>';
+          }).join('')}</tr>
+          <tr><td><strong>Education</strong></td>${cands.map(c => {
+            const edu = c.resumeData?.education?.length
+              ? c.resumeData.education.map(e => e.degree + (e.school ? ' (' + e.school + ')' : '')).slice(0, 2).join('; ')
+              : '';
+            return '<td>' + escHTML(edu || 'See profile') + '</td>';
+          }).join('')}</tr>
+          <tr><td><strong>Rate</strong></td>${cands.map((c, i) => {
+            const rate = fmtSalary(c.salary || v.salaryRange) || 'TBD';
+            const allRates = cands.map(x => parseFloat((x.salary || '').replace(/[^0-9.]/g, ''))).filter(Boolean);
+            const thisRate = parseFloat((c.salary || '').replace(/[^0-9.]/g, ''));
+            const isLowest = allRates.length > 1 && thisRate && thisRate === Math.min(...allRates);
+            return '<td' + (isLowest ? ' class="highlight-cell"' : '') + '>' + escHTML(rate) + '</td>';
+          }).join('')}</tr>
+          ${anyTap ? `<tr><td><strong>TAP</strong></td>${cands.map(c => `<td>${c.tap ? '<span style="color:var(--primary);font-weight:700;">Yes ★</span>' : 'No'}</td>`).join('')}</tr>` : ''}
         </tbody>
       </table>
     </div>
@@ -2278,13 +2311,13 @@ ${candidates.slice(0, i).filter(prev => prev.recruiterNote).map(prev => `- ${pre
 
 You MUST use a completely different angle, different sommelier term, and different opening word than ALL notes above.` : ''}
 
-KEEP IT TIGHT: "why" = exactly 3-5 SHORT bullets separated by \\n. Each bullet is ONE line, max 15 words. Start with a specific fact (tool, number, cert). "note" = 2-3 sentences MAX (under 60 words). No rambling. No filler.
+KEEP IT TIGHT: "why" = exactly 3-5 SHORT bullets separated by \\n. Each bullet is ONE line, max 15 words. Start with a specific fact (tool, number, cert). "note" = 2-3 sentences MAX (under 60 words). No rambling. No filler. "detailedNote" = 3-5 sentences (80-150 words). This is a deeper recruiter analysis. Explain WHY this candidate is the right fit for this specific client. Reference their strongest experience, compare to the batch, and give an honest assessment including trade-offs. This goes in a visible Recruiter Note footer on the card.
 
 CRITICAL: ONLY reference facts that appear in the VERIFIED RESUME DATA or spreadsheet info above. Do NOT invent companies, job titles, certifications, or metrics. If you don't have specific data, keep bullets general but honest.
 
 Return ONLY valid JSON. No markdown fences. No explanation before or after.
 - "jobs" field: Copy ONLY from VERIFIED RESUME DATA above. If no verified data, return empty array []. NEVER invent jobs.
-{"why":"Heavily certified Microsoft specialist: AZ-900, MS-900, AZ-104 in progress\\nLives in the exact DIS environment: remote ticket management, M365 admin daily\\nHandles 50+ tickets/week at current MSP. The bread-and-butter issues eating your time\\n4 years IT support across 2 MSPs. Knows the pace and the tools\\nStrong communicator. Clients at current role rate him 4.8/5 satisfaction","note":"Menard is the sleep easy at night hire in this batch. MSP background means he knows the pace, the tools, the client expectations. Minimal ramp-up. Solid all-rounder who can carry the load from day one.","experience":"4 yrs IT Support","skills":"Azure, M365, ServiceNow, Active Directory, PowerShell, ITIL","jobs":[{"role":"Service Desk Engineer","company":"Datacom MSP","dates":"Mar 2023 - Present"},{"role":"IT Support Specialist","company":"TechCorp SA","dates":"Jan 2021 - Feb 2023"}]}
+{"why":"Heavily certified Microsoft specialist: AZ-900, MS-900, AZ-104 in progress\\nLives in the exact DIS environment: remote ticket management, M365 admin daily\\nHandles 50+ tickets/week at current MSP. The bread-and-butter issues eating your time\\n4 years IT support across 2 MSPs. Knows the pace and the tools\\nStrong communicator. Clients at current role rate him 4.8/5 satisfaction","note":"Menard is the sleep easy at night hire in this batch. MSP background means he knows the pace, the tools, the client expectations. Minimal ramp-up. Solid all-rounder who can carry the load from day one.","detailedNote":"Menard is the strongest technical profile in this batch by a clear margin. He's not just checking boxes. He's lived in the MSP world for 4 years, handling 50+ tickets weekly across Azure, M365, and Active Directory. His current role at Datacom mirrors exactly what DIS needs. The AZ-104 in progress shows he's investing in his own growth. At this rate, you're getting enterprise-grade IT support at mid-market pricing. The safe bet if you want someone who can hit the ground running with zero ramp-up.","experience":"4 yrs IT Support","skills":"Azure, M365, ServiceNow, Active Directory, PowerShell, ITIL","jobs":[{"role":"Service Desk Engineer","company":"Datacom MSP","dates":"Mar 2023 - Present"},{"role":"IT Support Specialist","company":"TechCorp SA","dates":"Jan 2021 - Feb 2023"}]}
 
 IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW content specific to THIS candidate (${c.name}). Use their actual skills, experience, and background. Do NOT copy the example text.`;
 
@@ -2292,7 +2325,7 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
       for (let attempt = 0; attempt < 3 && !parsed; attempt++) {
         try {
           if (attempt > 0) showAIStatus('loading', `Retry ${attempt} for ${c.name}...`);
-          const text = await callAI_premium(prompt, 500);
+          const text = await callAI_premium(prompt, 800);
           let jsonStr = text;
           // Strip markdown code fences (any format)
           jsonStr = jsonStr.replace(/^[\s\S]*?```(?:json)?\s*\n?/i, '').replace(/\n?\s*```[\s\S]*$/, '');
@@ -2318,9 +2351,9 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
               const m = text.match(new RegExp('"' + key + '"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}])'));
               return m ? m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
             };
-            const why = extract('why'), note = extract('note'), exp = extract('experience'), sk = extract('skills');
+            const why = extract('why'), note = extract('note'), dn = extract('detailedNote'), exp = extract('experience'), sk = extract('skills');
             if (why || note) {
-              parsed = { why, note, experience: exp, skills: sk };
+              parsed = { why, note, detailedNote: dn, experience: exp, skills: sk };
             } else { throw pe; }
           }
         } catch(retryErr) {
@@ -2337,6 +2370,7 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
             .join('\n');
         }
         if (parsed.note) c.recruiterNote = parsed.note.length > 400 ? parsed.note.slice(0, 400).replace(/\s+\S*$/, '...') : parsed.note;
+        if (parsed.detailedNote) c.detailedNote = parsed.detailedNote.length > 800 ? parsed.detailedNote.slice(0, 800).replace(/\s+\S*$/, '...') : parsed.detailedNote;
         if (parsed.experience) c.experience = parsed.experience;
         if (parsed.skills) c.skills = parsed.skills;
         // Only use AI jobs as fallback when resume extraction didn't get experience
