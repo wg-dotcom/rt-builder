@@ -461,9 +461,11 @@ function _gk_get() { return _gk.map(c => String.fromCharCode(c)).join(''); }
 const _qk = [103,115,107,95,110,85,117,114,105,50,89,69,102,49,97,120,74,79,112,90,89,105,114,72,87,71,100,121,98,51,70,89,85,101,122,98,56,97,87,82,70,104,103,51,55,79,55,113,86,89,87,115,108,57,86,121];
 function _qk_get() { return _qk.map(c => String.fromCharCode(c)).join(''); }
 
-// Premium AI call: Claude first (for brand detection, recruiter notes — quality matters)
+// Premium AI call: Claude first, then Gemini, Groq 70b, Groq 8b as fallbacks
 async function callAI_premium(prompt, maxTokens = 200) {
-  // Primary: Anthropic Claude Sonnet (best quality)
+  const errors = [];
+
+  // Provider 1: Anthropic Claude Sonnet (best quality)
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST', signal: AbortSignal.timeout(30000),
@@ -472,21 +474,49 @@ async function callAI_premium(prompt, maxTokens = 200) {
     });
     const d = await resp.json();
     if (resp.ok && d.content?.[0]) return d.content[0].text.trim();
-    console.log('Anthropic failed, trying Groq:', d.error?.message || resp.status);
-  } catch(e) { console.log('Anthropic error:', e.message); }
+    errors.push('Anthropic: ' + (d.error?.message || resp.status));
+  } catch(e) { errors.push('Anthropic: ' + e.message); }
 
-  // Fallback: Groq 70b (bigger model for quality tasks)
+  // Provider 2: Gemini Flash (fast, generous limits)
   try {
+    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + _gk_get(), {
+      method: 'POST', signal: AbortSignal.timeout(20000),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 } })
+    });
+    const d = await resp.json();
+    if (resp.ok && d.candidates?.[0]?.content?.parts?.[0]?.text) return d.candidates[0].content.parts[0].text.trim();
+    errors.push('Gemini: ' + (d.error?.message || resp.status));
+  } catch(e) { errors.push('Gemini: ' + e.message); }
+
+  // Provider 3: Groq 70b (good quality fallback)
+  try {
+    const groqTokens = Math.min(maxTokens, 1500);
     const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST', signal: AbortSignal.timeout(15000),
+      method: 'POST', signal: AbortSignal.timeout(20000),
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _qk_get() },
-      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: maxTokens, temperature: 0.3, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: groqTokens, temperature: 0.3, messages: [{ role: 'user', content: prompt }] })
     });
     const d = await resp.json();
     if (resp.ok && d.choices?.[0]?.message?.content) return d.choices[0].message.content.trim();
-  } catch(e) {}
+    errors.push('Groq 70b: ' + (d.error?.message || resp.status));
+  } catch(e) { errors.push('Groq 70b: ' + e.message); }
 
-  throw new Error('All AI providers failed');
+  // Provider 4: Groq 8b (last resort — lower quality but very reliable)
+  try {
+    const groqTokens = Math.min(maxTokens, 1500);
+    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST', signal: AbortSignal.timeout(15000),
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _qk_get() },
+      body: JSON.stringify({ model: 'llama-3.1-8b-instant', max_tokens: groqTokens, temperature: 0.3, messages: [{ role: 'user', content: prompt }] })
+    });
+    const d = await resp.json();
+    if (resp.ok && d.choices?.[0]?.message?.content) return d.choices[0].message.content.trim();
+    errors.push('Groq 8b: ' + (d.error?.message || resp.status));
+  } catch(e) { errors.push('Groq 8b: ' + e.message); }
+
+  console.error('All AI providers failed:', errors);
+  throw new Error('All AI providers failed: ' + errors.join(' | '));
 }
 
 // Standard AI call: Groq 8b first (fast + free for bulk tasks like resume extraction)
@@ -2389,6 +2419,7 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
 
     } catch (err) {
       console.error(`AI notes failed for ${c.name}:`, err);
+      showAIStatus('error', `Failed for ${c.name}: ${err.message}`);
     }
   }
 
@@ -2401,7 +2432,7 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
   } else if (successCount > 0) {
     showAIStatus('success', `Got ${successCount}/${candidates.length} done. Some failed. Check Preview.`);
   } else {
-    showAIStatus('error', 'Failed to generate notes. Check console for errors.');
+    showAIStatus('error', 'All notes failed. Open browser console (F12) to see which API providers failed and why.');
   }
 }
 
