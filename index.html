@@ -466,7 +466,7 @@ async function callAI_premium(prompt, maxTokens = 200) {
   // Primary: Anthropic Claude Sonnet (best quality)
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', signal: AbortSignal.timeout(15000),
+      method: 'POST', signal: AbortSignal.timeout(30000),
       headers: { 'Content-Type': 'application/json', 'x-api-key': _ak_get(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
     });
@@ -2239,9 +2239,9 @@ async function generateAINotes() {
 
   for (let i = 0; i < candidates.length; i++) {
     const c = candidates[i];
-    // Delay between candidates (Groq free tier: 6K tokens/min, ~1300 tokens/candidate = 15s safe)
+    // Brief delay between candidates to avoid rate limits
     if (i > 0) {
-      const delay = 15;
+      const delay = 3;
       for (let s = delay; s > 0; s--) {
         showAIStatus('loading', `Writing notes for ${c.name} in ${s}s (${i + 1}/${candidates.length})...`);
         await new Promise(r => setTimeout(r, 1000));
@@ -2325,7 +2325,7 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
       for (let attempt = 0; attempt < 3 && !parsed; attempt++) {
         try {
           if (attempt > 0) showAIStatus('loading', `Retry ${attempt} for ${c.name}...`);
-          const text = await callAI_premium(prompt, 800);
+          const text = await callAI_premium(prompt, 2000);
           let jsonStr = text;
           // Strip markdown code fences (any format)
           jsonStr = jsonStr.replace(/^[\s\S]*?```(?:json)?\s*\n?/i, '').replace(/\n?\s*```[\s\S]*$/, '');
