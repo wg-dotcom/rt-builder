@@ -1807,14 +1807,21 @@ function buildResumeHTML(c, v) {
 }
 
 // Normalize resume URLs to direct-download format
+function extractGDriveId(url) {
+  if (!url) return null;
+  let m = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+  if (m) return m[1];
+  m = url.match(/drive\.google\.com\/open\?id=([^&]+)/);
+  if (m) return m[1];
+  m = url.match(/id=([a-zA-Z0-9_-]{20,})/);
+  if (m) return m[1];
+  return null;
+}
+
 function normalizeResumeUrl(url) {
   if (!url) return url;
-  // Google Drive share links → direct download
-  let m = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
-  if (m) return 'https://drive.google.com/uc?export=download&id=' + m[1];
-  m = url.match(/drive\.google\.com\/open\?id=([^&]+)/);
-  if (m) return 'https://drive.google.com/uc?export=download&id=' + m[1];
-  // Dropbox: replace dl=0 with dl=1
+  const gid = extractGDriveId(url);
+  if (gid) return 'https://drive.google.com/uc?export=download&id=' + gid;
   if (url.includes('dropbox.com')) return url.replace(/dl=0/, 'dl=1');
   return url;
 }
@@ -1827,7 +1834,7 @@ async function fetchPDFviaProxy(url) {
     { url: url }
   ];
   const promises = proxies.map(async (p) => {
-    const resp = await fetch(p.url, { signal: AbortSignal.timeout(20000) });
+    const resp = await fetch(p.url, { signal: AbortSignal.timeout(25000) });
     if (!resp.ok) throw new Error('Proxy failed: ' + resp.status);
     const blob = await resp.blob();
     if (blob.size < 100) throw new Error('Response too small, likely an error page');
@@ -1835,6 +1842,21 @@ async function fetchPDFviaProxy(url) {
     const firstBytes = await blob.slice(0, 5).text();
     if (firstBytes === '%PDF-' || blob.type === 'application/pdf') return blob;
     if (blob.size > 1000 && !firstBytes.startsWith('<') && !firstBytes.startsWith('{')) return blob;
+    // Google Drive virus scan interstitial — extract confirm link and retry
+    if (firstBytes.startsWith('<') && blob.size < 200000) {
+      const html = await blob.text();
+      const confirmMatch = html.match(/confirm=([^&"']+)/) || html.match(/id="download-form"[\s\S]*?action="([^"]+)"/);
+      if (confirmMatch) {
+        const confirmUrl = url.includes('confirm=') ? url : url + '&confirm=' + (confirmMatch[1] || 't');
+        console.log('[RESUME] Google Drive confirm redirect, retrying...');
+        const resp2 = await fetch(p.url.replace(encodeURIComponent(url), encodeURIComponent(confirmUrl)), { signal: AbortSignal.timeout(20000) });
+        if (resp2.ok) {
+          const blob2 = await resp2.blob();
+          const fb2 = await blob2.slice(0, 5).text();
+          if (fb2 === '%PDF-' || blob2.type === 'application/pdf' || (blob2.size > 1000 && !fb2.startsWith('<'))) return blob2;
+        }
+      }
+    }
     throw new Error('Response is not a PDF');
   });
   return await Promise.any(promises);
@@ -1844,7 +1866,8 @@ async function fetchPDFviaProxy(url) {
 async function fetchResumeContent(url) {
   if (!url) return null;
   const normalizedUrl = normalizeResumeUrl(url);
-  console.log('[RESUME] Fetching:', url, '→', normalizedUrl);
+  const gid = extractGDriveId(url);
+  console.log('[RESUME] Fetching:', url, '→', normalizedUrl, gid ? '(GDrive: ' + gid + ')' : '');
 
   // STRATEGY 1: PDF binary fetch (direct + CORS proxies)
   const isPDFLikely = normalizedUrl.match(/\.pdf($|\?)/i) ||
@@ -1865,8 +1888,42 @@ async function fetchResumeContent(url) {
     }
   }
 
-  // STRATEGY 2: Speculative PDF fetch for unknown URLs
-  if (!isPDFLikely) {
+  // STRATEGY 2: Google Drive alternate export URLs
+  if (gid) {
+    const altUrls = [
+      'https://drive.google.com/uc?export=download&confirm=t&id=' + gid,
+      'https://docs.google.com/document/d/' + gid + '/export?format=pdf',
+      'https://drive.google.com/u/0/uc?id=' + gid + '&export=download&confirm=t'
+    ];
+    for (const altUrl of altUrls) {
+      try {
+        console.log('[RESUME] Trying GDrive alt:', altUrl.slice(0, 60) + '...');
+        const blob = await fetchPDFviaProxy(altUrl);
+        console.log('[RESUME] GDrive alt PDF fetched:', blob.size, 'bytes');
+        return { type: 'pdf', data: blob };
+      } catch(e) {
+        console.log('[RESUME] GDrive alt failed:', e.message);
+      }
+    }
+    // Try Google Docs viewer text extraction as last GDrive resort
+    try {
+      const viewerUrl = 'https://docs.google.com/gview?url=https://drive.google.com/uc?id=' + gid + '&export=download&embedded=true';
+      const html = await fetchWithProxy(viewerUrl);
+      if (html && html.length > 300) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        tmp.querySelectorAll('script,style,nav,footer,header').forEach(el => el.remove());
+        const text = tmp.textContent.replace(/\s+/g, ' ').trim();
+        if (text.length > 100) {
+          console.log('[RESUME] GDrive viewer text extracted:', text.length, 'chars');
+          return { type: 'text', data: text.slice(0, 8000) };
+        }
+      }
+    } catch(e) { console.log('[RESUME] GDrive viewer failed:', e.message); }
+  }
+
+  // STRATEGY 3: Speculative PDF fetch for non-obvious URLs
+  if (!isPDFLikely && !gid) {
     try {
       console.log('[RESUME] Trying speculative PDF fetch...');
       const blob = await fetchPDFviaProxy(normalizedUrl);
@@ -1877,14 +1934,14 @@ async function fetchResumeContent(url) {
     }
   }
 
-  // STRATEGY 3: HTML text extraction via CORS proxy
+  // STRATEGY 4: HTML text extraction via CORS proxy (profile pages, online resumes, Fillout forms)
   try {
     console.log('[RESUME] Trying HTML text extraction...');
     const html = await fetchWithProxy(normalizedUrl);
     if (html && html.length > 200) {
       const tmp = document.createElement('div');
       tmp.innerHTML = html;
-      tmp.querySelectorAll('script,style,nav,footer,header').forEach(el => el.remove());
+      tmp.querySelectorAll('script,style,nav,footer,header,iframe').forEach(el => el.remove());
       const text = tmp.textContent.replace(/\s+/g, ' ').trim();
       if (text.length > 100) {
         console.log('[RESUME] HTML text extracted:', text.length, 'chars');
@@ -1965,22 +2022,33 @@ async function generateResumeData() {
           '{"summary":"Copy their professional summary VERBATIM if present. If not present, return empty string.","skillCategories":[{"category":"Category Name","skills":"Skill 1, Skill 2, Skill 3"}],"experience":[{"role":"Exact Job Title","company":"Exact Company Name","dates":"Exact dates as written","description":"Copy ALL bullet points VERBATIM. Separate with newlines."}],"education":[{"degree":"Exact Degree","school":"Exact School Name","year":"Year"}],"certifications":["Exact cert names"],"languages":[{"name":"Language","level":"Level if stated"}]}';
         aiText = await callAI_premium(prompt, 3000);
       } else {
-        // Resume fetch failed — use ONLY literal spreadsheet data. NO AI generation.
-        // This prevents hallucinated company names, fake job titles, and invented dates.
-        console.log('[RESUME] Cannot access resume for ' + c.name + '. Using spreadsheet data only.');
-        showAIStatus('loading', 'Resume not accessible for ' + c.name + '. Using spreadsheet data only...');
-        const skills = c.skills ? c.skills.split(/[,;]/).map(s => s.trim()).filter(Boolean) : [];
-        c.resumeData = {
-          summary: c.summary || c.recruiterNote || '',
-          skillCategories: skills.length ? [{ category: 'Core Skills', skills: skills.join(', ') }] : [],
-          experience: c.resumeData?.experience?.length ? c.resumeData.experience : [],
-          education: [],
-          certifications: [],
-          languages: [],
-          fullExtract: true,
-          _sourceWarning: 'Resume link not accessible. Data from spreadsheet only.'
-        };
-        continue; // skip AI parsing below
+        // Resume fetch failed — try to structure whatever spreadsheet data we have via AI
+        console.log('[RESUME] Cannot access resume for ' + c.name + '. Structuring spreadsheet data...');
+        showAIStatus('loading', 'Resume not accessible for ' + c.name + '. Structuring available data...');
+        const rawText = [c.summary, c.skills, c.experience, c.recruiterNote].filter(Boolean).join('\n');
+        if (rawText.length > 30) {
+          try {
+            const fallbackPrompt = 'Structure the following candidate notes into resume format. ONLY use facts explicitly stated below. Do NOT invent or guess anything not present.\n\nCANDIDATE: ' + c.name + '\nDATA:\n' + rawText.slice(0, 3000) + '\n\nReturn ONLY valid JSON:\n{"summary":"Brief professional summary from the data","skillCategories":[{"category":"Category","skills":"Skill1, Skill2"}],"experience":[{"role":"Job Title","company":"Company Name","dates":"Dates","description":"Key responsibilities"}],"education":[{"degree":"Degree","school":"School","year":"Year"}],"certifications":[],"languages":[{"name":"Language","level":"Level"}]}\n\nIf a field has no data, use empty array []. NEVER invent companies or job titles not in the text.';
+            aiText = await callAI_premium(fallbackPrompt, 1500);
+          } catch(e) {
+            console.log('[RESUME] Spreadsheet AI structuring failed:', e.message);
+          }
+        }
+        if (!aiText) {
+          // Pure fallback: just use raw spreadsheet fields
+          const skills = c.skills ? c.skills.split(/[,;]/).map(s => s.trim()).filter(Boolean) : [];
+          c.resumeData = {
+            summary: c.summary || c.recruiterNote || '',
+            skillCategories: skills.length ? [{ category: 'Core Skills', skills: skills.join(', ') }] : [],
+            experience: c.resumeData?.experience?.length ? c.resumeData.experience : [],
+            education: [],
+            certifications: [],
+            languages: [],
+            fullExtract: true,
+            _sourceWarning: 'Resume link not accessible. Data from spreadsheet only.'
+          };
+          continue; // skip AI parsing below
+        }
       }
 
       // Parse the JSON response
