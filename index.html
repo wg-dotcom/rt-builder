@@ -2392,22 +2392,30 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
         }
       }
       if (parsed) {
+        // Garbage filter: reject placeholder/meta content from AI
+        const isGarbage = (s) => /^(unknown|n\/?a|not (available|provided|specified)|none|tbd|no data|\?|-)$/i.test(s.trim());
+        const isMetaCommentary = (s) => /(no verified|no resume|not available|data available|without verified|lacking data|no specific|pricing point may indicate|entry.to.mid)/i.test(s);
+
         if (parsed.why) {
-          // Cap each bullet to ~120 chars, max 5 bullets
-          c.summary = parsed.why.split('\n').filter(s => s.trim()).slice(0, 5)
+          // Cap each bullet to ~120 chars, max 5 bullets, filter out meta-commentary
+          const bullets = parsed.why.split('\n').filter(s => s.trim()).slice(0, 5)
             .map(s => s.replace(/^[-•*]\s*/, '').trim())
-            .map(s => s.length > 120 ? s.slice(0, 120).replace(/\s+\S*$/, '...') : s)
-            .join('\n');
+            .filter(s => !isGarbage(s) && !isMetaCommentary(s))
+            .map(s => s.length > 120 ? s.slice(0, 120).replace(/\s+\S*$/, '...') : s);
+          if (bullets.length > 0) c.summary = bullets.join('\n');
         }
-        if (parsed.note) c.recruiterNote = parsed.note.length > 400 ? parsed.note.slice(0, 400).replace(/\s+\S*$/, '...') : parsed.note;
-        if (parsed.detailedNote) c.detailedNote = parsed.detailedNote.length > 800 ? parsed.detailedNote.slice(0, 800).replace(/\s+\S*$/, '...') : parsed.detailedNote;
-        if (parsed.experience) c.experience = parsed.experience;
-        if (parsed.skills) c.skills = parsed.skills;
+        if (parsed.note && !isGarbage(parsed.note)) c.recruiterNote = parsed.note.length > 400 ? parsed.note.slice(0, 400).replace(/\s+\S*$/, '...') : parsed.note;
+        if (parsed.detailedNote && !isGarbage(parsed.detailedNote)) c.detailedNote = parsed.detailedNote.length > 800 ? parsed.detailedNote.slice(0, 800).replace(/\s+\S*$/, '...') : parsed.detailedNote;
+        if (parsed.experience && !isGarbage(parsed.experience)) c.experience = parsed.experience;
+        // Only update skills if AI returned real data, not placeholders
+        if (parsed.skills && !isGarbage(parsed.skills)) c.skills = parsed.skills;
         // Only use AI jobs as fallback when resume extraction didn't get experience
         if (parsed.jobs && Array.isArray(parsed.jobs) && parsed.jobs.length > 0) {
-          if (!c.resumeData?.experience?.length) {
+          // Filter out placeholder jobs
+          const realJobs = parsed.jobs.filter(j => j.role && j.company && !isGarbage(j.role) && !isGarbage(j.company));
+          if (realJobs.length > 0 && !c.resumeData?.experience?.length) {
             if (!c.resumeData) c.resumeData = {};
-            c.resumeData.experience = parsed.jobs.map(j => ({
+            c.resumeData.experience = realJobs.map(j => ({
               role: j.role || '',
               company: j.company || '',
               dates: j.dates || ''
