@@ -1554,17 +1554,18 @@ function generateCandidateCard(c, idx, v) {
   // Experience entries from resumeData
   const expEntries = c.resumeData?.experience?.length ? c.resumeData.experience.slice(0, 4) : [];
 
-  // Strength bullets from summary
+  // Fit indicators: prefer AI-generated client-specific bullets, fallback to summary splitting
   const strengthBullets = (() => {
+    if (c.fitIndicators && c.fitIndicators.length > 0) return c.fitIndicators.slice(0, 5);
     if (!c.summary) return [];
     let bullets = c.summary.split('\n').filter(s => s.trim());
     if (bullets.length <= 1) bullets = c.summary.split(/(?<=\.)\s+/).filter(s => s.trim() && s.length > 10);
     return bullets.slice(0, 5).map(s => s.replace(/^[-•*]\s*/, '').trim());
   })();
 
-  // Strength bars (top 6 skills with pseudo-scores based on position)
-  const barSkills = skills.slice(0, 6);
-  const barScores = [95, 90, 88, 85, 82, 78];
+  // Strength bars: prefer AI-generated contextual scores, fallback to position-based
+  const barSkills = c.strengthScores ? Object.keys(c.strengthScores).slice(0, 6) : skills.slice(0, 6);
+  const barScores = c.strengthScores ? Object.values(c.strengthScores).slice(0, 6) : [95, 90, 88, 85, 82, 78];
 
   return `
     <div class="candidate-card">
@@ -2311,22 +2312,39 @@ async function generateAINotes() {
 
   let successCount = 0;
 
-  // Fetch client website content for richer context (skip if slow, don't block notes)
+  // Fetch client website content for richer context - try multiple pages for depth
   let clientSiteContext = '';
   if (v.clientUrl) {
     showAIStatus('loading', 'Scanning customer website for context...');
     try {
-      const siteHTML = await Promise.race([
-        fetchWithProxy(v.clientUrl),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('Site fetch timeout')), 8000))
-      ]);
-      if (siteHTML) {
-        const siteParser = new DOMParser();
-        const siteDoc = siteParser.parseFromString(siteHTML, 'text/html');
-        const metaDesc = siteDoc.querySelector('meta[name="description"]')?.getAttribute('content') || '';
-        const headings = Array.from(siteDoc.querySelectorAll('h1, h2, h3')).map(h => h.textContent.trim()).filter(Boolean).slice(0, 15).join(' | ');
-        const bodyText = siteDoc.body?.innerText?.slice(0, 2000) || '';
-        clientSiteContext = `\nCLIENT WEBSITE CONTENT (use their language and terminology when describing fit):\nMeta: ${metaDesc}\nHeadings: ${headings}\nPage text: ${bodyText}`;
+      const baseUrl = v.clientUrl.replace(/\/+$/, '');
+      const pagesToTry = [baseUrl, baseUrl + '/about', baseUrl + '/about-us', baseUrl + '/services'];
+      const fetchPage = async (url) => {
+        try {
+          const html = await Promise.race([
+            fetchWithProxy(url),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000))
+          ]);
+          if (!html) return null;
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          const meta = doc.querySelector('meta[name="description"]')?.getAttribute('content') || '';
+          const headings = Array.from(doc.querySelectorAll('h1, h2, h3')).map(h => h.textContent.trim()).filter(Boolean).slice(0, 15).join(' | ');
+          const body = doc.body?.innerText?.slice(0, 3000) || '';
+          // Extract CSS colors for brand context
+          const styleText = Array.from(doc.querySelectorAll('style')).map(s => s.textContent).join(' ');
+          const cssColors = (styleText.match(/#[0-9a-fA-F]{3,8}/g) || []).filter((v, i, a) => a.indexOf(v) === i).slice(0, 10).join(', ');
+          return { url, meta, headings, body, cssColors };
+        } catch(e) { return null; }
+      };
+      const results = (await Promise.all(pagesToTry.map(fetchPage))).filter(Boolean);
+      if (results.length) {
+        const mainPage = results[0];
+        const extraPages = results.slice(1);
+        clientSiteContext = `\nCLIENT WEBSITE CONTENT (use their language, terminology, and industry context when describing fit):`;
+        clientSiteContext += `\nMeta: ${mainPage.meta}\nHeadings: ${mainPage.headings}\nCSS Colors: ${mainPage.cssColors}\nHomepage text: ${mainPage.body}`;
+        for (const p of extraPages) {
+          clientSiteContext += `\n--- ${p.url} ---\nHeadings: ${p.headings}\nText: ${p.body.slice(0, 1500)}`;
+        }
       }
     } catch(e) { console.log('Site context skipped:', e.message); clientSiteContext = ''; }
   }
@@ -2372,7 +2390,7 @@ Risk: Safe bet, Sleep easy at night hire, The calculated risk worth taking, All 
 
 CLIENT: ${v.clientName} | Role: ${v.roleTitle} | Budget: ${v.salaryRange || '?'} | Schedule: ${v.schedule || 'Full-time, US hours'}
 Pain points & context: ${v.contextNotes || 'Not provided'}
-${clientSiteContext ? clientSiteContext.slice(0, 600) : ''}
+${clientSiteContext ? clientSiteContext.slice(0, 2500) : ''}
 ${notebookContext ? '\nRESEARCH NOTES (use this context heavily):\n' + notebookContext.slice(0, 1200) : ''}
 
 ALL CANDIDATES IN THIS BATCH (position THIS candidate against them):
@@ -2382,8 +2400,8 @@ THIS CANDIDATE (#${i+1}/${candidates.length}):
 Name: ${c.name} | Location: ${c.location || '?'} | Salary: ${c.salary || '?'}/mo | TAP: ${c.tap ? 'Yes' : 'No'}
 ${c.experience ? 'Experience: ' + c.experience : ''} ${c.skills ? '| Skills: ' + c.skills : ''}
 ${c.resumeLink ? 'Resume: ' + c.resumeLink : ''}
-${c.summary ? 'Raw notes: ' + c.summary.slice(0, 500) : ''}
-${c.resumeData?.experience?.length ? 'VERIFIED RESUME DATA (use ONLY these facts for job history):\n' + c.resumeData.experience.map(e => `- ${e.role} at ${e.company} (${e.dates || '?'})${e.description ? ': ' + e.description.split('\n')[0] : ''}`).join('\n') : 'NOTE: Resume could not be accessed. Use ONLY the spreadsheet info above. Do NOT invent job titles or companies.'}
+${c.summary ? 'Raw notes: ' + c.summary.slice(0, 1500) : ''}
+${c.resumeData?.experience?.length ? 'VERIFIED RESUME DATA (use ONLY these facts for job history):\n' + c.resumeData.experience.map(e => `- ${e.role} at ${e.company} (${e.dates || '?'})${e.description ? ':\n  ' + e.description.slice(0, 500) : ''}`).join('\n') : 'NOTE: Resume could not be accessed. Use ONLY the spreadsheet info above. Do NOT invent job titles or companies.'}
 ${c.resumeData?.skillCategories?.length ? 'VERIFIED SKILLS: ' + c.resumeData.skillCategories.map(sc => sc.skills).join(', ') : ''}
 
 EXAMPLE OF EXACTLY WHAT I WANT (study the rhythm, specificity, and sommelier flair):
@@ -2411,11 +2429,15 @@ You MUST use a completely different angle, different sommelier term, and differe
 
 KEEP IT TIGHT: "why" = exactly 3-5 SHORT bullets separated by \\n. Each bullet is ONE line, max 15 words. Start with a specific fact (tool, number, cert). "note" = 2-3 sentences MAX (under 60 words). No rambling. No filler. "detailedNote" = 3-5 sentences (80-150 words). This is a deeper recruiter analysis. Explain WHY this candidate is the right fit for this specific client. Reference their strongest experience, compare to the batch, and give an honest assessment including trade-offs. This goes in a visible Recruiter Note footer on the card.
 
+"fitIndicators" = exactly 3 bullets. Each connects a SPECIFIC candidate skill/experience to a SPECIFIC client pain point or need from the client website/context. Format: "[Candidate fact] → [Why it matters for THIS client]". These appear as client-specific fit indicators on the card.
+
+"strengthScores" = object mapping 6 skill names to scores (0-100). Scores must be CONTEXTUAL: how strong is this candidate at each skill relative to what THIS role requires? A 95 means near-perfect match. A 70 means adequate. Be honest. Not everyone is 90+.
+
 CRITICAL: ONLY reference facts that appear in the VERIFIED RESUME DATA or spreadsheet info above. Do NOT invent companies, job titles, certifications, or metrics. If you don't have specific data, keep bullets general but honest.
 
 Return ONLY valid JSON. No markdown fences. No explanation before or after.
 - "jobs" field: Copy ONLY from VERIFIED RESUME DATA above. If no verified data, return empty array []. NEVER invent jobs.
-{"why":"Heavily certified Microsoft specialist: AZ-900, MS-900, AZ-104 in progress\\nLives in the exact DIS environment: remote ticket management, M365 admin daily\\nHandles 50+ tickets/week at current MSP. The bread-and-butter issues eating your time\\n4 years IT support across 2 MSPs. Knows the pace and the tools\\nStrong communicator. Clients at current role rate him 4.8/5 satisfaction","note":"Menard is the sleep easy at night hire in this batch. MSP background means he knows the pace, the tools, the client expectations. Minimal ramp-up. Solid all-rounder who can carry the load from day one.","detailedNote":"Menard is the strongest technical profile in this batch by a clear margin. He's not just checking boxes. He's lived in the MSP world for 4 years, handling 50+ tickets weekly across Azure, M365, and Active Directory. His current role at Datacom mirrors exactly what DIS needs. The AZ-104 in progress shows he's investing in his own growth. At this rate, you're getting enterprise-grade IT support at mid-market pricing. The safe bet if you want someone who can hit the ground running with zero ramp-up.","experience":"4 yrs IT Support","skills":"Azure, M365, ServiceNow, Active Directory, PowerShell, ITIL","jobs":[{"role":"Service Desk Engineer","company":"Datacom MSP","dates":"Mar 2023 - Present"},{"role":"IT Support Specialist","company":"TechCorp SA","dates":"Jan 2021 - Feb 2023"}]}
+{"why":"Heavily certified Microsoft specialist: AZ-900, MS-900, AZ-104 in progress\\nLives in the exact DIS environment: remote ticket management, M365 admin daily\\nHandles 50+ tickets/week at current MSP. The bread-and-butter issues eating your time\\n4 years IT support across 2 MSPs. Knows the pace and the tools\\nStrong communicator. Clients at current role rate him 4.8/5 satisfaction","note":"Menard is the sleep easy at night hire in this batch. MSP background means he knows the pace, the tools, the client expectations. Minimal ramp-up. Solid all-rounder who can carry the load from day one.","detailedNote":"Menard is the strongest technical profile in this batch by a clear margin. He's not just checking boxes. He's lived in the MSP world for 4 years, handling 50+ tickets weekly across Azure, M365, and Active Directory. His current role at Datacom mirrors exactly what DIS needs. The AZ-104 in progress shows he's investing in his own growth. At this rate, you're getting enterprise-grade IT support at mid-market pricing. The safe bet if you want someone who can hit the ground running with zero ramp-up.","experience":"4 yrs IT Support","skills":"Azure, M365, ServiceNow, Active Directory, PowerShell, ITIL","fitIndicators":["AZ-900 + MS-900 certified → DIS runs on Azure/M365 stack, zero ramp-up on core tools","50+ tickets/week at current MSP → Matches DIS's high-volume support model exactly","4.8/5 client satisfaction score → DIS values client-facing communication for their managed services"],"strengthScores":{"Azure":92,"M365 Admin":95,"ServiceNow":85,"Active Directory":88,"Client Communication":90,"ITIL Process":78},"jobs":[{"role":"Service Desk Engineer","company":"Datacom MSP","dates":"Mar 2023 - Present"},{"role":"IT Support Specialist","company":"TechCorp SA","dates":"Jan 2021 - Feb 2023"}]}
 
 IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW content specific to THIS candidate (${c.name}). Use their actual skills, experience, and background. Do NOT copy the example text.`;
 
@@ -2477,6 +2499,15 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
         if (parsed.experience && !isGarbage(parsed.experience)) c.experience = parsed.experience;
         // Only update skills if AI returned real data, not placeholders
         if (parsed.skills && !isGarbage(parsed.skills)) c.skills = parsed.skills;
+        // Store fit indicators (3 client-specific bullets)
+        if (parsed.fitIndicators && Array.isArray(parsed.fitIndicators) && parsed.fitIndicators.length > 0) {
+          c.fitIndicators = parsed.fitIndicators.filter(s => s && typeof s === 'string' && s.trim()).slice(0, 3);
+        }
+        // Store strength scores (skill:score object for bars)
+        if (parsed.strengthScores && typeof parsed.strengthScores === 'object' && !Array.isArray(parsed.strengthScores)) {
+          const entries = Object.entries(parsed.strengthScores).filter(([k, v]) => k && typeof v === 'number' && v >= 0 && v <= 100);
+          if (entries.length > 0) c.strengthScores = Object.fromEntries(entries.slice(0, 6));
+        }
         // Only use AI jobs as fallback when resume extraction didn't get experience
         if (parsed.jobs && Array.isArray(parsed.jobs) && parsed.jobs.length > 0) {
           // Filter out placeholder jobs
