@@ -1085,6 +1085,7 @@ async function pullFromSheet() {
     const titleIdx = headers.findIndex(h => h.includes('title') || h.includes('role'));
     const resumeIdx = headers.findIndex(h => h.includes('resume'));
     const videoIdx = headers.findIndex(h => h.includes('video'));
+    const portfolioIdx = headers.findIndex(h => h.includes('portfolio') || h.includes('website') || h.includes('github') || h.includes('behance') || h.includes('dribbble'));
     const tapIdx = headers.findIndex(h => h.includes('tap') || h.includes('talent agent'));
     const locationIdx = headers.findIndex(h => h.includes('location') || h.includes('country'));
     const experienceIdx = headers.findIndex(h => h.includes('experience') || h.includes('years') || h.includes('seniority') || h.includes('level'));
@@ -1120,6 +1121,7 @@ async function pullFromSheet() {
         title: titleIdx >= 0 ? (row[titleIdx] || '').trim() : '',
         resumeLink: resumeIdx >= 0 ? (row[resumeIdx] || '').trim() : '',
         videoLink: videoIdx >= 0 ? (row[videoIdx] || '').trim() : '',
+        portfolioLink: portfolioIdx >= 0 ? (row[portfolioIdx] || '').trim() : '',
         tap: tapIdx >= 0 ? (row[tapIdx] || '').trim().toUpperCase() === 'TRUE' : false,
         location: locationIdx >= 0 ? (row[locationIdx] || '').trim() : '',
         experience: experienceIdx >= 0 ? (row[experienceIdx] || '').trim() : '',
@@ -1132,7 +1134,7 @@ async function pullFromSheet() {
 
     updateCandidateList();
     const filters = [filterCompany && `company: "${filterCompany}"`, filterBatch && `batch: ${filterBatch}`, filterTitle && `title: "${filterTitle}"`].filter(Boolean).join(', ') || 'no filters';
-    const cols = [nameIdx >= 0 && 'name', companyIdx >= 0 && 'company', batchIdx >= 0 && 'batch', titleIdx >= 0 && 'title', locationIdx >= 0 && 'location', experienceIdx >= 0 && 'experience', salaryIdx >= 0 && 'salary', skillsIdx >= 0 && 'skills', resumeIdx >= 0 && 'resume', videoIdx >= 0 && 'video', tapIdx >= 0 && 'TAP', summaryIdx >= 0 && 'summary'].filter(Boolean).join(', ');
+    const cols = [nameIdx >= 0 && 'name', companyIdx >= 0 && 'company', batchIdx >= 0 && 'batch', titleIdx >= 0 && 'title', locationIdx >= 0 && 'location', experienceIdx >= 0 && 'experience', salaryIdx >= 0 && 'salary', skillsIdx >= 0 && 'skills', resumeIdx >= 0 && 'resume', videoIdx >= 0 && 'video', portfolioIdx >= 0 && 'portfolio', tapIdx >= 0 && 'TAP', summaryIdx >= 0 && 'summary'].filter(Boolean).join(', ');
     console.log('Sheet headers:', headers.join(' | '));
     console.log('Matched columns:', cols);
     showStatus('success', `Found ${candidates.length} candidate${candidates.length !== 1 ? 's' : ''} (${filters}). Columns detected: ${cols}.`);
@@ -1204,7 +1206,7 @@ function addManualCandidate() {
   const name = prompt('Candidate full name:');
   if (!name) return;
   candidates.push({
-    name, company: '', title: '', resumeLink: '', videoLink: '',
+    name, company: '', title: '', resumeLink: '', videoLink: '', portfolioLink: '',
     tap: false, location: '', experience: '', salary: '', skills: '', summary: '', recruiterNote: ''
   });
   updateCandidateList();
@@ -1642,6 +1644,7 @@ function generateCandidateCard(c, idx, v) {
 
           <div class="card-actions">
             ${c.videoLink ? `<a class="video-intro-btn" href="${escHTML(c.videoLink)}" target="_blank"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Watch Intro Video</a>` : ''}
+            ${c.portfolioLink ? `<a class="video-intro-btn" href="${escHTML(c.portfolioLink)}" target="_blank"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>View Portfolio</a>` : ''}
             ${c.tap ? `<a class="video-intro-btn" href="https://drive.google.com/file/d/1lvb0EWiOoIzbKKFGXN0IiuDjdGYOZdHC/view" target="_blank"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>TAP Info</a>` : ''}
           </div>
         </div>
