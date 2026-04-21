@@ -1186,15 +1186,25 @@ function updateCandidateList() {
     return;
   }
 
-  list.innerHTML = candidates.map((c, i) => `
+  list.innerHTML = candidates.map((c, i) => {
+    // Resume-health warning: surfaces candidates whose experience block will render empty
+    let warn = '';
+    if (!c.resumeLink && !c.resumeData?.experience?.length) {
+      warn = '<span title="No resume link provided. Experience section will be empty when published." style="color:var(--orange);font-size:11px;margin-left:6px;">⚠ No resume link</span>';
+    } else if (c.resumeData?._sourceWarning) {
+      warn = '<span title="Resume link could not be fetched. Experience section will be empty." style="color:var(--orange);font-size:11px;margin-left:6px;">⚠ Resume not fetched</span>';
+    } else if (c.resumeData?.fullExtract && (!c.resumeData.experience || c.resumeData.experience.length === 0)) {
+      warn = '<span title="AI could not extract work history from this resume. Experience section will be empty when published." style="color:var(--orange);font-size:11px;margin-left:6px;">⚠ No experience parsed</span>';
+    }
+    return `
     <div class="candidate-item">
       <div>
-        <div class="name">${c.name} ${c.tap ? '<span style="color:var(--orange)">★ TAP</span>' : ''} ${c.recruiterNote ? '<span style="color:var(--green);font-size:11px;">✓ AI</span>' : ''}</div>
+        <div class="name">${c.name} ${c.tap ? '<span style="color:var(--orange)">★ TAP</span>' : ''} ${c.recruiterNote ? '<span style="color:var(--green);font-size:11px;">✓ AI</span>' : ''}${warn}</div>
         <div class="meta">${c.location || 'Location TBD'} · ${c.experience || 'Exp TBD'} · ${fmtSalary(c.salary) || 'Salary TBD'}</div>
       </div>
       <button class="remove-btn" onclick="removeCandidate(${i})">&times;</button>
     </div>
-  `).join('');
+  `;}).join('');
 }
 
 function removeCandidate(idx) {
