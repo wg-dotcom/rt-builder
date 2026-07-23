@@ -2594,24 +2594,41 @@ function generateComparisonTable(cands, v) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// AUTO DEPLOY (zero config — token baked in, repo auto-named)
+// AUTO DEPLOY (restricted server-side publisher, repo auto-named)
 // ═══════════════════════════════════════════════════════════════
-const _k = [103,104,112,95,77,116,116,111,113,118,119,112,79,57,112,83,114,99,55,65,90,76,71,85,53,70,65,49,105,84,112,108,72,111,51,112,85,76,99,116];
-function _t() {
-  const override = (typeof localStorage !== 'undefined') && localStorage.getItem('gh_pat_override');
-  if (override && override.startsWith('ghp_')) return override;
-  return _k.map(c => String.fromCharCode(c)).join('');
+const PUBLISHER_URL = 'https://sagan-builder-publisher.jesus-p.workers.dev';
+const PUBLISHER_KEY_STORAGE = 'sagan_publisher_key';
+
+function getPublisherKey() {
+  const key = (typeof localStorage !== 'undefined') && localStorage.getItem(PUBLISHER_KEY_STORAGE);
+  return key && key.length >= 32 ? key : null;
 }
-async function _promptNewToken(reason) {
-  const msg = 'GitHub token was rejected (' + reason + ').\n\nPaste a fresh Personal Access Token (ghp_...) with "repo" + "pages" scope.\n\nGet one at: https://github.com/settings/tokens/new?scopes=repo,pages\n\nIt will be saved in this browser only.';
-  const tok = prompt(msg, '');
-  if (tok && tok.startsWith('ghp_') && tok.length >= 40) {
-    localStorage.setItem('gh_pat_override', tok.trim());
-    return tok.trim();
+
+async function promptPublisherKey(reason) {
+  const prefix = reason ? reason + '\n\n' : '';
+  const msg = prefix + 'Enter the Sagan Publisher Access Key provided by Revenue Operations.\n\nThis is not a GitHub token. It only permits publishing candidate pages.';
+  const key = prompt(msg, '');
+  if (key && key.trim().length >= 32) {
+    localStorage.setItem(PUBLISHER_KEY_STORAGE, key.trim());
+    return key.trim();
   }
   return null;
 }
-const GH_ORG = 'wg-dotcom';
+
+async function publisherRequest(path, body, key) {
+  const response = await fetch(PUBLISHER_URL + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Publisher-Key': key },
+    body: JSON.stringify(body)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) {
+    const error = new Error(data.error || `Publisher request failed (${response.status}).`);
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
 
 function showToast(msg, type) {
   const t = document.getElementById('deployToast');
@@ -2634,56 +2651,43 @@ async function autoDeploy() {
   btn.disabled = true;
   btn.innerHTML = '⏳ Deploying...';
 
-  const token = _t();
   const repo = (v.clientName + '-' + v.roleTitle).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') + '-candidates';
 
   showToast(`Creating <strong>${repo}</strong> and deploying...`, 'loading');
 
   try {
-    // 1. Check if repo exists
-    let repoExists = false;
-    try {
-      const check = await fetch(`https://api.github.com/repos/${GH_ORG}/${repo}`, {
-        headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
-      });
-      repoExists = check.ok;
-    } catch(e) {}
+    let publisherKey = getPublisherKey();
+    if (!publisherKey) publisherKey = await promptPublisherKey('Publisher access is required to deploy.');
+    if (!publisherKey) throw new Error('Publisher access key is required.');
 
-    // 2. Create repo if needed
-    if (!repoExists) {
-      const createResp = await fetch(`https://api.github.com/user/repos`, {
-        method: 'POST',
-        headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: repo,
-          private: false,
-          auto_init: true,
-          description: `Recruitment presentation — ${v.clientName} · ${v.roleTitle}`
-        })
-      });
-      if (!createResp.ok) {
-        const err = await createResp.json();
-        throw new Error(err.message || 'Failed to create repository');
+    // Check the live repository and download prior content only when merging batches.
+    const state = await publisherRequest('/state', {
+      repo,
+      includeContent: parseInt(v.batchNumber) > 1
+    }, publisherKey);
+    const repoExists = state.repoExists;
+    const fileExistsOnRepo = state.fileExists;
+    const sha = state.sha;
+    const existingHTML = state.html;
+    let overwriteConfirmed = false;
+
+    // Prevent an accidental Batch 1 overwrite of a live page.
+    if (fileExistsOnRepo && parseInt(v.batchNumber) === 1) {
+      const proceed = confirm(
+        '⚠️ This repo already has content but Batch Number is set to 1.\n\n' +
+        'Deploying now will OVERWRITE the existing page (you will lose previous batches).\n\n' +
+        'Did you mean to bump the Batch Number to 2 (or higher) to add a new batch instead?\n\n' +
+        'OK = overwrite the page (deploy as Batch 1)\n' +
+        'Cancel = stop, let me change the Batch Number'
+      );
+      if (!proceed) {
+        showToast('Deploy stopped. Change the Batch Number in Tab 1, then click Deploy again.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg> Deploy';
+        return;
       }
-      await new Promise(r => setTimeout(r, 2500));
+      overwriteConfirmed = true;
     }
-
-    // 3. Check for existing file (get SHA + content for multi-batch merge)
-    let sha = null;
-    let existingHTML = null;
-    try {
-      const fileCheck = await fetch(`https://api.github.com/repos/${GH_ORG}/${repo}/contents/index.html`, {
-        headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
-      });
-      if (fileCheck.ok) {
-        const fileData = await fileCheck.json();
-        sha = fileData.sha;
-        // Decode existing HTML for multi-batch merge
-        if (parseInt(v.batchNumber) > 1) {
-          try { existingHTML = decodeURIComponent(escape(atob(fileData.content.replace(/\n/g, '')))); } catch(e) {}
-        }
-      }
-    } catch(e) {}
 
     // 4a. Extract real resume data BEFORE building cards
     await generateResumeData();
@@ -2692,6 +2696,8 @@ async function autoDeploy() {
     if (existingHTML && parseInt(v.batchNumber) > 1) {
       showToast(`Merging Batch ${v.batchNumber} into existing page...`, 'loading');
       generatedHTML = mergeBatchIntoExisting(existingHTML, candidates, v);
+    } else if (parseInt(v.batchNumber) > 1 && fileExistsOnRepo) {
+      throw new Error('Could not fetch existing page content to merge batch ' + v.batchNumber + ' into. Deploy stopped to avoid overwriting prior batches.');
     } else {
       generatedHTML = buildPresentationHTML();
     }
@@ -2721,28 +2727,19 @@ async function autoDeploy() {
     frame.appendChild(iframe);
     iframe.onload = () => { try { iframe.style.height = iframe.contentDocument.body.scrollHeight + 40 + 'px'; } catch(e) {} };
 
-    // 5. Push index.html
-    const content = btoa(unescape(encodeURIComponent(generatedHTML)));
-    const putBody = { message: `${existingHTML ? 'Add Batch ' + v.batchNumber : repoExists ? 'Update' : 'Initial'} presentation — Batch ${v.batchNumber} · ${v.roleTitle}`, content };
-    if (sha) putBody.sha = sha;
+    // Publish through the restricted server-side service. GitHub credentials never enter the browser.
+    const commitMessage = `${existingHTML ? 'Add Batch ' + v.batchNumber : repoExists ? 'Update' : 'Initial'} presentation — Batch ${v.batchNumber} · ${v.roleTitle}`;
+    const deployed = await publisherRequest('/deploy', {
+      repo,
+      html: generatedHTML,
+      expectedSha: sha,
+      batchNumber: Number(v.batchNumber) || 1,
+      overwriteConfirmed,
+      description: `Recruitment presentation — ${v.clientName} · ${v.roleTitle}`,
+      commitMessage
+    }, publisherKey);
 
-    const pushResp = await fetch(`https://api.github.com/repos/${GH_ORG}/${repo}/contents/index.html`, {
-      method: 'PUT',
-      headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-      body: JSON.stringify(putBody)
-    });
-    if (!pushResp.ok) { throw new Error((await pushResp.json()).message || 'Failed to push file'); }
-
-    // 6. Enable GitHub Pages
-    try {
-      await fetch(`https://api.github.com/repos/${GH_ORG}/${repo}/pages`, {
-        method: 'POST',
-        headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: { branch: 'main', path: '/' } })
-      });
-    } catch(e) {}
-
-    const liveUrl = `https://${GH_ORG}.github.io/${repo}/`;
+    const liveUrl = deployed.liveUrl;
     const batchMsg = existingHTML ? `Batch ${v.batchNumber} merged into existing page!` : 'Deployed!';
     showToast(`${batchMsg} Your page will be live in ~60 seconds:<br><a href="${liveUrl}" target="_blank" style="color:var(--green);font-weight:700;font-size:14px;">${liveUrl}</a>`, 'success');
 
@@ -2758,12 +2755,12 @@ async function autoDeploy() {
     urlField.value = liveUrl;
 
   } catch(err) {
-    // If the token was rejected, offer to paste a fresh one and auto-retry
-    const looksLikeAuth = /bad credentials|401|unauthorized|requires authentication/i.test(err.message || '');
-    if (looksLikeAuth) {
-      const fresh = await _promptNewToken(err.message || 'bad credentials');
+    // If the limited publisher key was rejected, clear it and offer a one-time retry.
+    if (err.status === 401) {
+      localStorage.removeItem(PUBLISHER_KEY_STORAGE);
+      const fresh = await promptPublisherKey(err.message || 'Publisher access key was rejected.');
       if (fresh) {
-        showToast('Retrying with new token...', 'loading');
+        showToast('Retrying with the new publisher key...', 'loading');
         btn.disabled = false;
         setTimeout(autoDeploy, 200);
         return;
