@@ -568,6 +568,72 @@ function uniqueTextLines(value, limit = Infinity) {
   }).slice(0, limit);
 }
 
+// ---- date normalization + computed experience years ----
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function normalizeDateText(value) {
+  let s = String(value || '').trim();
+  if (!s) return s;
+  s = s.replace(/\b(today|currently|current|now|presente|actualidad|ongoing|to date)\b/gi, 'Present');
+  s = s.replace(/\s*[–—~]+\s*|\s+-\s+/g, ' – ');
+  // dd/mm/yyyy → "Mon YYYY". Sagan's talent base is mostly outside the US, so
+  // ambiguous numeric triples read as day-first; an unambiguous month wins.
+  s = s.replace(/\b(\d{1,2})[\/.](\d{1,2})[\/.](\d{2,4})\b/g, (m, a, b, y) => {
+    let mo = Number(b);
+    if (mo > 12 && Number(a) <= 12) mo = Number(a);
+    if (mo < 1 || mo > 12) return m;
+    return MONTH_ABBR[mo - 1] + ' ' + (y.length === 2 ? '20' + y : y);
+  });
+  // mm/yyyy and yyyy-mm → "Mon YYYY"
+  s = s.replace(/\b(\d{1,2})[\/.](\d{4})\b/g, (m, a, y) => (Number(a) >= 1 && Number(a) <= 12) ? MONTH_ABBR[Number(a) - 1] + ' ' + y : m);
+  s = s.replace(/\b(\d{4})-(\d{1,2})\b/g, (m, y, a) => (Number(a) >= 1 && Number(a) <= 12) ? MONTH_ABBR[Number(a) - 1] + ' ' + y : m);
+  return s.replace(/\s{2,}/g, ' ').trim();
+}
+function parseResumeDateApprox(token) {
+  const s = String(token || '').trim();
+  if (!s) return null;
+  if (/present/i.test(s)) return Date.now();
+  let m = s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+(\d{4})\b/i);
+  if (m) return Date.UTC(Number(m[2]), MONTH_ABBR.findIndex(x => x.toLowerCase() === m[1].toLowerCase().slice(0, 3)), 1);
+  m = s.match(/\b((?:19|20)\d{2})\b/);
+  if (m) return Date.UTC(Number(m[1]), 6, 1);
+  return null;
+}
+// Experience span = earliest role start → latest role end (or Present).
+// Overlapping roles are not double-counted; internal gaps are not subtracted.
+function computeExperienceYears(experience) {
+  let earliest = null, latest = null;
+  (experience || []).forEach(item => {
+    const parts = String(item.dates || '').split(/–|—|\bto\b/i).map(p => p.trim()).filter(Boolean);
+    if (!parts.length) return;
+    const start = parseResumeDateApprox(parts[0]);
+    const end = parseResumeDateApprox(parts[parts.length - 1]);
+    if (start != null && (earliest == null || start < earliest)) earliest = start;
+    if (end != null && (latest == null || end > latest)) latest = end;
+  });
+  if (earliest == null || latest == null || latest <= earliest) return null;
+  return (latest - earliest) / (365.25 * 864e5);
+}
+function experienceYearsLabel(experience) {
+  const years = computeExperienceYears(experience);
+  if (years == null) return '';
+  if (years < 1) return '<1 yr';
+  return Math.round(years) + ' yrs';
+}
+// The card-copy model estimates a "N yrs X" label; the number must come from the
+// resume's own date spans, and project-only profiles must never read "Unverified".
+function reconcileExperienceLabel(label, resumeData) {
+  const computed = experienceYearsLabel(resumeData?.experience);
+  const s = String(label || '').trim();
+  const isPlaceholder = !s || /unverified|unknown|n\/?a\b|tbd/i.test(s);
+  if (!computed) {
+    if (!resumeData?.experience?.length && resumeData?.projects?.length && isPlaceholder) return 'Project-based experience';
+    return label;
+  }
+  if (isPlaceholder) return computed;
+  if (/\d+\s*\+?\s*(?:years?|yrs?)/i.test(s)) return s.replace(/(?:~\s*)?\d+\s*\+?\s*(?:years?|yrs?)/i, computed);
+  return computed + ' · ' + s;
+}
+
 function normalizeResumeData(data) {
   const value = data && typeof data === 'object' ? data : {};
   const list = input => Array.isArray(input) ? input : [];
@@ -580,13 +646,18 @@ function normalizeResumeData(data) {
     experience: list(value.experience).filter(Boolean).map(item => ({
       role: String(item.role || item.title || '').trim(),
       industry: String(item.industry || item.sector || item.company || '').trim(),
-      dates: String(item.dates || item.date || item.period || '').trim(),
+      dates: normalizeDateText(String(item.dates || item.date || item.period || '').trim()),
       description: uniqueTextLines(item.description || item.responsibilities || item.bullets).join('\n')
     })).filter(item => item.role || item.description),
+    projects: list(value.projects).filter(Boolean).map(item => ({
+      name: String(item.name || item.title || '').trim(),
+      stack: String(item.stack || item.tech || item.tools || '').trim(),
+      description: uniqueTextLines(item.description || item.bullets).join('\n')
+    })).filter(item => item.name || item.description),
     education: list(value.education).filter(Boolean).map(item => ({
       degree: String(item.degree || '').trim(),
       school: String(item.school || item.institution || '').trim(),
-      year: String(item.year || item.dates || '').trim()
+      year: normalizeDateText(String(item.year || item.dates || '').trim())
     })).filter(item => item.degree || item.school),
     certifications: [...new Set(list(value.certifications).map(item => String(item || '').trim()).filter(Boolean))],
     languages: list(value.languages).filter(Boolean).map(item => typeof item === 'string'
@@ -625,10 +696,11 @@ function auditResumeExtraction(data, sourceText = '') {
   if (/\b(work experience|professional experience|employment|career history|experience)\b/.test(source) && value.experience.length === 0) warnings.push('work history was not extracted');
   if (dateTokens.length >= 2 && value.experience.length && !value.experience.some(item => item.dates)) warnings.push('employment dates were not extracted');
   if (/\b(education|academic background|university|college|bachelor|master|degree)\b/.test(source) && value.education.length === 0) warnings.push('education was not extracted');
+  if (/\bprojects?\b/.test(source) && value.experience.length === 0 && value.projects.length === 0) warnings.push('projects section was not extracted');
   if (/\b(languages?|linguistic)\b/.test(source) && value.languages.length === 0) warnings.push('languages were not extracted');
   if (/\b(certifications?|licenses?|credentials?)\b/.test(source) && value.certifications.length === 0) warnings.push('certifications were not extracted');
   if (value.experience.length && responsibilityChars < 40) warnings.push('experience responsibilities look incomplete');
-  const score = value.experience.length * 12 + value.experience.filter(item => item.dates).length * 3 +
+  const score = value.experience.length * 12 + value.projects.length * 8 + value.experience.filter(item => item.dates).length * 3 +
     Math.min(20, Math.floor(responsibilityChars / 80)) + value.education.length * 5 +
     value.skillCategories.length * 4 + value.certifications.length * 2 + value.languages.length * 2 +
     (value.summary.length > 40 ? 5 : 0) - warnings.length * 5;
@@ -645,12 +717,13 @@ ACCURACY RULES:
 - Preserve every education entry, year/date, certification, language and proficiency, tool, and skill.
 - Never output last name, email, phone, address, employer names, or links.
 - If a section is absent, return an empty array. Do not replace missing facts with placeholders.
+- Capture personal/technical/portfolio projects under "projects" — many strong entry-level candidates list projects instead of formal employment; never drop them.
 ${retryWarnings.length ? '- A previous pass missed: ' + retryWarnings.join('; ') + '. Pay special attention to those sections.\n' : ''}
 RESUME TEXT:
 ${String(resumeText || '').slice(0, 50000)}
 
 Return ONLY one complete valid JSON object, no markdown:
-{"summary":"Professional summary verbatim if present, otherwise empty","skillCategories":[{"category":"Category","skills":"Skill 1, Skill 2"}],"experience":[{"role":"Exact Job Title","industry":"Employer sector only","dates":"Exact dates as written","description":"ALL bullets separated by newline characters"}],"education":[{"degree":"Exact Degree","school":"Exact School","year":"Exact year/dates"}],"certifications":["Exact certification"],"languages":[{"name":"Language","level":"Exact level if stated"}]}`;
+{"summary":"Professional summary verbatim if present, otherwise empty","skillCategories":[{"category":"Category","skills":"Skill 1, Skill 2"}],"experience":[{"role":"Exact Job Title","industry":"Employer sector only","dates":"Exact dates as written","description":"ALL bullets separated by newline characters"}],"projects":[{"name":"Exact project name","stack":"Tools/stack if stated","description":"ALL bullets separated by newline characters"}],"education":[{"degree":"Exact Degree","school":"Exact School","year":"Exact year/dates"}],"certifications":["Exact certification"],"languages":[{"name":"Language","level":"Exact level if stated"}]}`;
 }
 
 async function structureResumeText(resumeText, candidateName, roleTitle) {
@@ -671,8 +744,8 @@ async function structureResumeText(resumeText, candidateName, roleTitle) {
     }
   }
   if (!best) throw new Error('Resume structuring failed: ' + errors.join(' | '));
-  const hasUsefulContent = best.data.experience.length || best.data.education.length ||
-    best.data.skillCategories.length || best.data.summary.length > 40;
+  const hasUsefulContent = best.data.experience.length || best.data.projects.length ||
+    best.data.education.length || best.data.skillCategories.length || best.data.summary.length > 40;
   if (!hasUsefulContent) throw new Error('Resume structuring returned no usable sections');
   best.data._qualityWarnings = best.warnings;
   return JSON.stringify(best.data);
@@ -1476,8 +1549,8 @@ function updateCandidateList() {
       warn = '<span title="' + escHTML(c.resumeData._sourceWarning) + '" style="color:var(--orange);font-size:11px;margin-left:6px;">⚠ Resume not fetched</span>';
     } else if (c.resumeData?._qualityWarnings?.length) {
       warn = '<span title="Extraction needs review: ' + escHTML(c.resumeData._qualityWarnings.join('; ')) + '" style="color:var(--orange);font-size:11px;margin-left:6px;">⚠ Review extraction</span>';
-    } else if (c.resumeData?.fullExtract && (!c.resumeData.experience || c.resumeData.experience.length === 0)) {
-      warn = '<span title="AI could not extract work history from this resume. Experience section will be empty when published." style="color:var(--orange);font-size:11px;margin-left:6px;">⚠ No experience parsed</span>';
+    } else if (c.resumeData?.fullExtract && !c.resumeData.experience?.length && !c.resumeData.projects?.length) {
+      warn = '<span title="AI could not extract work history or projects from this resume. Experience section will be empty when published." style="color:var(--orange);font-size:11px;margin-left:6px;">⚠ No experience parsed</span>';
     }
     return `
     <div class="candidate-item">
@@ -1977,7 +2050,8 @@ function generateCandidateCard(c, idx, v) {
   const otherSkills = skills.slice(5);
 
   // Experience entries from resumeData
-  const expEntries = c.resumeData?.experience?.length ? c.resumeData.experience.slice(0, 4) : [];
+  const expEntries = c.resumeData?.experience?.length ? c.resumeData.experience.slice(0, 4)
+    : (c.resumeData?.projects || []).slice(0, 4).map(p => ({ role: p.name, industry: 'Independent project', dates: p.stack, description: p.description }));
 
   // Fit indicators: prefer AI-generated client-specific bullets, fallback to summary splitting
   const strengthBullets = (() => {
@@ -2095,7 +2169,9 @@ function buildResumeHTML(c, v) {
   }
 
   // Parse experience entries from resumeData if available, otherwise use summary
-  const experienceSection = c.resumeData?.experience?.length ? c.resumeData.experience.map(exp => {
+  const expSource = c.resumeData?.experience?.length ? c.resumeData.experience
+    : (c.resumeData?.projects || []).map(p => ({ role: p.name, industry: p.stack ? 'Project · ' + p.stack : 'Independent project', dates: '', description: p.description }));
+  const experienceSection = expSource.length ? expSource.map(exp => {
     const desc = exp.description || '';
     const descHTML = desc.includes('\n')
       ? '<ul class="exp-bullets">' + desc.split('\n').filter(s => s.trim()).map(s => '<li>' + escHTML(s.replace(/^[-•*]\s*/, '')) + '</li>').join('') + '</ul>'
@@ -2372,12 +2448,13 @@ async function fetchResumeContent(url) {
 function visualResumeExtractionPrompt(candidateName, roleTitle) {
   return 'Extract the COMPLETE resume for ' + candidateName + ' (applying for ' + (roleTitle || 'the role') + ') from the attached document/image.\n\n' +
     'Use ONLY visible facts. Preserve every job, exact title, exact employment dates, ALL responsibility bullets, education entries and dates, certifications, languages and levels, tools, and skills. ' +
-    'Never output the last name, email, phone, address, links, or employer company names. Return employer INDUSTRY only. If a section is absent, use an empty array.\n\n' +
+    'Never output the last name, email, phone, address, links, or employer company names. Return employer INDUSTRY only. If a section is absent, use an empty array. ' +
+    'Capture personal/technical/portfolio projects under "projects" — many strong entry-level candidates list projects instead of formal employment; never drop them.\n\n' +
     'Return ONLY one complete valid JSON object, no markdown:\n' +
-    '{"summary":"Professional summary verbatim if present","skillCategories":[{"category":"Category","skills":"Skill 1, Skill 2"}],"experience":[{"role":"Exact Job Title","industry":"Employer sector only","dates":"Exact dates as written","description":"ALL bullets separated by newline characters"}],"education":[{"degree":"Exact Degree","school":"Exact School","year":"Exact year/dates"}],"certifications":["Exact certification"],"languages":[{"name":"Language","level":"Exact level if stated"}]}';
+    '{"summary":"Professional summary verbatim if present","skillCategories":[{"category":"Category","skills":"Skill 1, Skill 2"}],"experience":[{"role":"Exact Job Title","industry":"Employer sector only","dates":"Exact dates as written","description":"ALL bullets separated by newline characters"}],"projects":[{"name":"Exact project name","stack":"Tools/stack if stated","description":"ALL bullets separated by newline characters"}],"education":[{"degree":"Exact Degree","school":"Exact School","year":"Exact year/dates"}],"certifications":["Exact certification"],"languages":[{"name":"Language","level":"Exact level if stated"}]}';
 }
 
-async function extractVisualResume(blob, mediaType, candidateName, roleTitle) {
+async function extractVisualResume(blob, mediaType, candidateName, roleTitle, sourceText = '') {
   const base64 = await blobToBase64(blob);
   const contentBlock = mediaType === 'application/pdf'
     ? { type: 'document', source: { type: 'base64', media_type: mediaType, data: base64 } }
@@ -2404,9 +2481,9 @@ async function extractVisualResume(blob, mediaType, candidateName, roleTitle) {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error?.message || ('HTTP ' + response.status));
       const raw = payload.content?.map(item => item.text || '').join('\n').trim();
-      const audited = auditResumeExtraction(parseResumeAIJSON(raw), '');
-      const hasUsefulContent = audited.data.experience.length || audited.data.education.length ||
-        audited.data.skillCategories.length || audited.data.summary.length > 40;
+      const audited = auditResumeExtraction(parseResumeAIJSON(raw), sourceText);
+      const hasUsefulContent = audited.data.experience.length || audited.data.projects.length ||
+        audited.data.education.length || audited.data.skillCategories.length || audited.data.summary.length > 40;
       if (!hasUsefulContent) throw new Error('OCR returned no usable resume sections');
       audited.data._qualityWarnings = audited.warnings;
       return JSON.stringify(audited.data);
@@ -2419,17 +2496,24 @@ async function extractVisualResume(blob, mediaType, candidateName, roleTitle) {
 }
 
 async function extractResumeFromPDF(pdfBlob, candidateName, roleTitle) {
+  // Vision-first: pdf.js returns text in content-stream order, which scrambles
+  // multi-column and styled resumes (dates detach from roles, bullets attach to
+  // the wrong job). The document block preserves the visual layout, so it is the
+  // primary path; the text layer still feeds the quality audit and the fallback.
+  let localText = '';
   try {
-    console.log('[RESUME] Extracting selectable PDF text for ' + candidateName + '...');
-    const localText = await extractTextFromPDFLocal(pdfBlob);
-    if (localText && localText.length >= 80) {
-      console.log('[RESUME] pdf.js extracted ' + localText.length + ' chars');
-      return await structureResumeText(localText, candidateName, roleTitle);
-    }
+    localText = await extractTextFromPDFLocal(pdfBlob);
+    console.log('[RESUME] pdf.js text layer: ' + localText.length + ' chars (audit/fallback)');
   } catch (error) {
-    console.log('[RESUME] Local PDF path failed, using document OCR:', error.message);
+    console.log('[RESUME] pdf.js text layer unavailable:', error.message);
   }
-  return extractVisualResume(pdfBlob, 'application/pdf', candidateName, roleTitle);
+  try {
+    return await extractVisualResume(pdfBlob, 'application/pdf', candidateName, roleTitle, localText);
+  } catch (error) {
+    console.log('[RESUME] Document vision path failed:', error.message);
+    if (localText && localText.length >= 80) return structureResumeText(localText, candidateName, roleTitle);
+    throw error;
+  }
 }
 
 async function extractResumeFromImage(imageBlob, mediaType, candidateName, roleTitle) {
@@ -2551,7 +2635,7 @@ function generateComparisonTable(cands, v) {
   }));
   addRow('Industries', cands.map(c => (c.resumeData && c.resumeData.experience && c.resumeData.experience.length)
     ? [...new Set(c.resumeData.experience.map(e => e.industry).filter(Boolean))].slice(0, 3).join(', ')
-    : ''));
+    : (c.resumeData?.projects?.length ? 'Independent projects' : '')));
   addRow('Core Strength', cands.map(c => (c.skills || '').split(',').slice(0, 3).map(s => s.trim()).filter(Boolean).join(', ')));
   addRow('HRIS / Tools', cands.map(c => (c.skills || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 5).join(', ')));
   addRow('Languages', cands.map(c => (c.resumeData && c.resumeData.languages && c.resumeData.languages.length)
@@ -2886,10 +2970,10 @@ THIS CANDIDATE (#${i+1}/${candidates.length}):
 Name: ${c.name.split(' ')[0]} (refer to them by FIRST NAME ONLY — never their last name) | Location: ${c.location || '?'} | Salary: ${fmtSalary(c.salary || v.salaryRange) || '?'} | TAP: ${c.tap ? 'Yes' : 'No'}
 ANONYMIZATION: Do NOT output the candidate's last name, company/employer names (refer to employers by INDUSTRY only), email, phone, or links.
 PRONOUNS: Never infer gender from a name, photo, country, or resume. Use the candidate's first name or they/them/their only.
-${c.experience ? 'Experience: ' + c.experience : ''} ${c.skills ? '| Skills: ' + c.skills : ''}
+${c.experience ? 'Experience: ' + c.experience : ''} ${experienceYearsLabel(c.resumeData?.experience) ? '| Experience computed from resume dates: ' + experienceYearsLabel(c.resumeData?.experience) + ' (use THIS number, never estimate your own) ' : ''}${c.skills ? '| Skills: ' + c.skills : ''}
 ${c.resumeLink ? 'Resume: ' + c.resumeLink : ''}
 ${c.summary ? 'Raw notes: ' + c.summary.slice(0, 1500) : ''}
-${c.resumeData?.experience?.length ? 'VERIFIED RESUME DATA (use ONLY these facts for job history):\n' + c.resumeData.experience.map(e => `- ${e.role}${e.industry ? ' in ' + e.industry : ''}${e.dates ? ' (' + e.dates + ')' : ''}${e.description ? ':\n  ' + e.description.slice(0, 1200) : ''}`).join('\n') : 'NOTE: Resume could not be accessed. Use ONLY the spreadsheet info above. Do NOT invent job titles or companies.'}
+${c.resumeData?.experience?.length ? 'VERIFIED RESUME DATA (use ONLY these facts for job history):\n' + c.resumeData.experience.map(e => `- ${e.role}${e.industry ? ' in ' + e.industry : ''}${e.dates ? ' (' + e.dates + ')' : ''}${e.description ? ':\n  ' + e.description.slice(0, 1200) : ''}`).join('\n') : c.resumeData?.projects?.length ? 'VERIFIED PROJECTS (the resume has no formal work history — this is a project-based, entry-level profile. Present these projects as the experience. NEVER describe the experience as "unverified"; call it project-based and judge the trajectory honestly):\n' + c.resumeData.projects.map(p => `- ${p.name}${p.stack ? ' [' + p.stack + ']' : ''}${p.description ? ':\n  ' + p.description.slice(0, 800) : ''}`).join('\n') : 'NOTE: Resume could not be accessed. Use ONLY the spreadsheet info above. Do NOT invent job titles or companies.'}
 ${c.resumeData?.skillCategories?.length ? 'VERIFIED SKILLS: ' + c.resumeData.skillCategories.map(sc => sc.skills).join(', ') : ''}
 
 EXAMPLE OF EXACTLY WHAT I WANT (study the rhythm, specificity, and sommelier flair):
@@ -2986,6 +3070,7 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
         if (parsed.note && !isGarbage(parsed.note)) c.recruiterNote = neutralizePronouns(parsed.note.length > 400 ? parsed.note.slice(0, 400).replace(/\s+\S*$/, '...') : parsed.note);
         if (parsed.detailedNote && !isGarbage(parsed.detailedNote)) c.detailedNote = neutralizePronouns(parsed.detailedNote.length > 800 ? parsed.detailedNote.slice(0, 800).replace(/\s+\S*$/, '...') : parsed.detailedNote);
         if (parsed.experience && !isGarbage(parsed.experience)) c.experience = parsed.experience;
+        c.experience = reconcileExperienceLabel(c.experience, c.resumeData) || c.experience;
         // Only update skills if AI returned real data, not placeholders
         if (parsed.skills && !isGarbage(parsed.skills)) c.skills = parsed.skills;
         // Store fit indicators (3 client-specific bullets)
