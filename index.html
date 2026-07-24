@@ -2338,16 +2338,27 @@ function normalizeResumeUrl(url) {
   return value;
 }
 
+const isGoogleUrl = (u) => /(?:docs|drive)\.google\.com|drive\.usercontent\.google\.com/i.test(String(u || ''));
+
 function resumeDownloadTargets(url) {
   const original = String(url || '').trim();
   const normalized = normalizeResumeUrl(original);
   const gid = extractGDriveId(original);
-  const values = [normalized];
-  if (gid) values.push(
+  // Google Docs documents: the export endpoints are the ONLY valid targets.
+  // The raw /edit URL returns the editor shell with permissive CORS — a fast
+  // garbage response that wins the race against the real file every time.
+  if (gid && /docs\.google\.com\/document\/d\//i.test(original)) {
+    return [
+      'https://docs.google.com/document/d/' + gid + '/export?format=txt',
+      'https://docs.google.com/document/d/' + gid + '/export?format=pdf'
+    ];
+  }
+  if (gid) return [...new Set([
+    normalized,
     'https://drive.google.com/uc?export=download&confirm=t&id=' + gid,
-    'https://docs.google.com/document/d/' + gid + '/export?format=pdf',
     'https://drive.google.com/u/0/uc?id=' + gid + '&export=download&confirm=t'
-  );
+  ])];
+  const values = [normalized];
   if (original && original !== normalized) values.push(original);
   return [...new Set(values.filter(Boolean))];
 }
@@ -2360,7 +2371,7 @@ function extractResumeTextFromHTML(html) {
   const authPage = /\b(request access|you need access|access denied|accessdenied|sign in to continue|permission denied|403 forbidden|nosuchkey|expiredtoken|request has expired|file you have requested does not exist|cannot scan this file|download anyway|quota exceeded|unable to open file)\b/i.test(text);
   const resumeSignals = /\b(experience|education|skills|employment|certifications|professional summary)\b/i.test(text);
   if (authPage && !resumeSignals) throw new Error('Resume requires access permission');
-  if (text.length < 80) throw new Error('HTML page contained too little resume text');
+  if (text.length < 200) throw new Error('HTML page contained too little resume text');
   return text.slice(0, 50000);
 }
 
@@ -2378,7 +2389,11 @@ async function classifyResumeBlob(blob, sourceUrl) {
   if (ascii.startsWith('GIF8')) return { type: 'image', mediaType: 'image/gif', data: blob };
   if (ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WEBP') return { type: 'image', mediaType: 'image/webp', data: blob };
   const raw = await blob.text();
-  if (mime.includes('html') || /^\s*(?:<!doctype|<html|<body)/i.test(raw)) return { type: 'text', data: extractResumeTextFromHTML(raw) };
+  if (mime.includes('html') || /^\s*(?:<!doctype|<html|<body)/i.test(raw)) {
+    // A Google editor/viewer page is chrome around the file, never the file itself.
+    if (isGoogleUrl(sourceUrl) && /\/(edit|view|preview)$/.test(path)) throw new Error('Google viewer page, not the file');
+    return { type: 'text', data: extractResumeTextFromHTML(raw) };
+  }
   const binaryNoise = (raw.match(/[\u0000\ufffd]/g) || []).length / Math.max(1, raw.length);
   if (mime.startsWith('text/') || path.endsWith('.txt') || path.endsWith('.md') || (raw.length >= 80 && binaryNoise < 0.02)) {
     const text = raw.replace(/\u0000/g, '').trim();
@@ -2419,10 +2434,15 @@ async function fetchResumeContent(url) {
   if (!url) return { type: 'error', error: 'No resume link was provided' };
   const targets = resumeDownloadTargets(url);
   const errors = [];
+  // Google endpoints never send CORS headers for the actual file — a direct
+  // browser fetch can only ever "succeed" with viewer-page garbage. Google
+  // targets therefore go through the Sagan proxy exclusively, and candidate
+  // resumes never touch public third-party proxies.
+  const directTargets = targets.filter(t => !isGoogleUrl(t));
   const groups = [
-    targets.map(target => ({ name: 'direct', url: target, targetUrl: target, timeout: 10000, retries: 0 })),
+    directTargets.map(target => ({ name: 'direct', url: target, targetUrl: target, timeout: 10000, retries: 0 })),
     targets.map(target => ({ name: 'Sagan proxy', url: TRUSTED_CV_PROXY + encodeURIComponent(target), targetUrl: target, timeout: 25000, retries: 1 }))
-  ];
+  ].filter(group => group.length);
   for (const group of groups) {
     try {
       const result = await fetchResumeGroup(group);
@@ -2430,11 +2450,12 @@ async function fetchResumeContent(url) {
       return result;
     } catch (error) { errors.push(error.message); }
   }
-  const encoded = encodeURIComponent(targets[0]);
-  const fallbacks = [
-    { name: 'AllOrigins fallback', url: 'https://api.allorigins.win/raw?url=' + encoded, targetUrl: targets[0], timeout: 15000 },
-    { name: 'CORS fallback', url: 'https://corsproxy.io/?url=' + encoded, targetUrl: targets[0], timeout: 15000 }
-  ];
+  const fallbackTarget = directTargets[0];
+  const encoded = fallbackTarget ? encodeURIComponent(fallbackTarget) : '';
+  const fallbacks = fallbackTarget ? [
+    { name: 'AllOrigins fallback', url: 'https://api.allorigins.win/raw?url=' + encoded, targetUrl: fallbackTarget, timeout: 15000 },
+    { name: 'CORS fallback', url: 'https://corsproxy.io/?url=' + encoded, targetUrl: fallbackTarget, timeout: 15000 }
+  ] : [];
   for (const source of fallbacks) {
     try { return await fetchResumeSource(source); }
     catch (error) { errors.push(error.message); }
