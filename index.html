@@ -194,6 +194,9 @@
       background: none; border: none; color: var(--red);
       cursor: pointer; font-size: 18px; padding: 0 4px;
     }
+    .candidate-item-actions { display: flex; align-items: center; gap: 6px; }
+    .gtc-toggle { border: 1px solid var(--border); border-radius: 999px; background: white; color: var(--text-dim); padding: 4px 8px; font-size: 10px; font-weight: 700; cursor: pointer; }
+    .gtc-toggle.on { background: #f5b800; border-color: rgba(9,58,62,.28); color: #093a3e; }
     .candidate-count {
       font-size: 12px; color: var(--text-dim);
       margin-top: 8px;
@@ -1383,6 +1386,12 @@ function fetchSheetViaJSONP(sheetId) {
   });
 }
 
+function isProgramValue(value) {
+  const status = String(value || '').trim().toLowerCase();
+  if (status.includes('global talent direct')) return false;
+  return status.includes('talent agent') || status.includes('global talent coaching') || status.includes('global talent consulting') || /(^|\W)(gtc|tap)(\W|$)/.test(status);
+}
+
 async function pullFromSheet() {
   const statusEl = document.getElementById('sheetStatus');
   const url = document.getElementById('sheetUrl').value.trim();
@@ -1437,7 +1446,7 @@ async function pullFromSheet() {
     let videoIdx = headers.findIndex(h => /(video\s*link|video\s*url|video\s*intro|intro\s*video|loom\s*link|loom\s*url|loom\s*video)/.test(h) && !isVideoStatusCol(h));
     if (videoIdx < 0) videoIdx = headers.findIndex(h => (h.includes('video') || h.includes('loom')) && !isVideoStatusCol(h));
     const portfolioIdx = headers.findIndex(h => h.includes('portfolio') || h.includes('website') || h.includes('github') || h.includes('behance') || h.includes('dribbble'));
-    const tapIdx = headers.findIndex(h => h.includes('tap') || h.includes('talent agent'));
+    const tapIdx = headers.findIndex(h => h === 'gtc' || h.includes('gtc candidate') || h.includes('global talent') || h.includes('talent agent') || h.includes('team status') || h === 'tap');
     const locationIdx = headers.findIndex(h => h.includes('location') || h.includes('country'));
     const experienceIdx = headers.findIndex(h => h.includes('experience') || h.includes('years') || h.includes('seniority') || h.includes('level'));
     const salaryIdx = findSalaryColumn(headers);
@@ -1473,7 +1482,7 @@ async function pullFromSheet() {
         resumeLink: resumeIdx >= 0 ? (row[resumeIdx] || '').trim() : '',
         videoLink: videoIdx >= 0 ? (row[videoIdx] || '').trim() : '',
         portfolioLink: portfolioIdx >= 0 ? (row[portfolioIdx] || '').trim() : '',
-        tap: tapIdx >= 0 ? (row[tapIdx] || '').trim().toUpperCase() === 'TRUE' : false,
+        tap: tapIdx >= 0 ? isProgramValue(row[tapIdx]) : false,
         location: locationIdx >= 0 ? (row[locationIdx] || '').trim() : '',
         experience: experienceIdx >= 0 ? (row[experienceIdx] || '').trim() : '',
         salary: salaryIdx >= 0 ? (row[salaryIdx] || '').trim() : '',
@@ -1487,7 +1496,7 @@ async function pullFromSheet() {
     candidates = dedupe.rows;
     updateCandidateList();
     const filters = [filterCompany && `company: "${filterCompany}"`, filterBatch && `batch: ${filterBatch}`, filterTitle && `title: "${filterTitle}"`].filter(Boolean).join(', ') || 'no filters';
-    const cols = [nameIdx >= 0 && 'name', companyIdx >= 0 && 'company', batchIdx >= 0 && 'batch', titleIdx >= 0 && 'title', locationIdx >= 0 && 'location', experienceIdx >= 0 && 'experience', salaryIdx >= 0 && 'salary', skillsIdx >= 0 && 'skills', resumeIdx >= 0 && 'resume', videoIdx >= 0 && 'video', portfolioIdx >= 0 && 'portfolio', tapIdx >= 0 && 'TAP', summaryIdx >= 0 && 'summary'].filter(Boolean).join(', ');
+    const cols = [nameIdx >= 0 && 'name', companyIdx >= 0 && 'company', batchIdx >= 0 && 'batch', titleIdx >= 0 && 'title', locationIdx >= 0 && 'location', experienceIdx >= 0 && 'experience', salaryIdx >= 0 && 'salary', skillsIdx >= 0 && 'skills', resumeIdx >= 0 && 'resume', videoIdx >= 0 && 'video', portfolioIdx >= 0 && 'portfolio', tapIdx >= 0 && 'GTC program', summaryIdx >= 0 && 'summary'].filter(Boolean).join(', ');
     console.log('Sheet headers:', headers.join(' | '));
     console.log('Matched columns:', cols);
     const duplicateNote = dedupe.removed ? ` Removed ${dedupe.removed} duplicate row${dedupe.removed === 1 ? '' : 's'}.` : '';
@@ -1555,16 +1564,21 @@ function updateCandidateList() {
     return `
     <div class="candidate-item">
       <div>
-        <div class="name">${escHTML(c.name)} ${c.tap ? '<span style="color:var(--orange)">★ TAP</span>' : ''} ${c.recruiterNote ? '<span style="color:var(--green);font-size:11px;">✓ AI</span>' : ''}${warn}</div>
+        <div class="name">${escHTML(c.name)} ${c.tap ? '<span style="color:var(--orange)">GTC</span>' : ''} ${c.recruiterNote ? '<span style="color:var(--green);font-size:11px;">✓ AI</span>' : ''}${warn}</div>
         <div class="meta">${escHTML(c.location || '—')} · ${escHTML(c.experience || '—')} · ${escHTML(fmtSalary(c.salary) || '—')}</div>
       </div>
-      <button class="remove-btn" onclick="removeCandidate(${i})">&times;</button>
+      <div class="candidate-item-actions"><button class="gtc-toggle ${c.tap ? 'on' : ''}" onclick="toggleGtc(${i})" title="Mark or unmark this candidate as part of GTC">GTC</button><button class="remove-btn" onclick="removeCandidate(${i})">&times;</button></div>
     </div>
   `;}).join('');
 }
 
 function removeCandidate(idx) {
   candidates.splice(idx, 1);
+  updateCandidateList();
+}
+
+function toggleGtc(idx) {
+  candidates[idx].tap = !candidates[idx].tap;
   updateCandidateList();
 }
 
@@ -1604,7 +1618,7 @@ body{background:var(--bg-page);color:var(--text-primary);font-family:var(--font-
 .hero-eyebrow{display:block;width:max-content;margin:0 0 18px;padding:0;background:none;border:0;border-radius:0;color:var(--text-light);font-size:11px;letter-spacing:1.8px}.hero h1{max-width:940px;margin-bottom:22px;color:var(--primary);font-size:clamp(38px,5vw,64px);font-weight:600;line-height:1.08;letter-spacing:-.025em}.hero h1 strong{font-weight:600}.hero h1 em{color:var(--highlight);font-weight:400}.hero-sub{max-width:760px;margin-bottom:34px;color:var(--text-primary);font-size:clamp(17px,1.6vw,20px);line-height:1.6}.hero-meta{gap:42px;padding-top:24px;border-top:1px solid var(--border)}.hero-meta-label{color:var(--text-light);font-size:10px;font-weight:500;letter-spacing:1.5px}.hero-meta-value{color:var(--primary);font-size:14px;font-weight:500}
 .editorial{max-width:760px;margin:0 auto 72px;padding:0 40px}.editorial-label{color:var(--highlight);font-size:12px;font-weight:500;letter-spacing:2px}.editorial-text{color:var(--text-primary);font-size:18px;line-height:1.7}.editorial-divider{display:none}
 .candidates-section{max-width:1180px;margin:0 auto;padding:0 40px 72px;background:transparent}.candidates-header{max-width:100%;margin-bottom:34px;padding:0 0 18px;text-align:left;border-bottom:1px solid var(--border)}.candidates-header::before{content:'02 · The candidates';display:block;margin-bottom:8px;color:var(--highlight);font-family:var(--font-meta);font-size:12px;font-weight:500;letter-spacing:2px;text-transform:uppercase}.candidates-header h2{color:var(--primary);font-size:clamp(26px,3vw,34px);font-weight:600}.candidates-header p{color:var(--text-light);font-family:var(--font-body);font-size:15px}.batch-switcher{justify-content:flex-start;margin:0 0 34px;padding:0}.batch-btn{border-radius:8px}.batch-btn.active{background:var(--primary);border-color:var(--primary)}.candidates{max-width:none;padding:0 0 10px;gap:32px}
-.candidate-card{max-width:none;margin:0;padding:0}.card{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 3px rgba(6,40,43,.04),0 4px 12px rgba(6,40,43,.04)}.card.featured{box-shadow:var(--shadow-md)}.card-top{padding:28px 32px 22px;background:linear-gradient(180deg,#f5f3f0,#fff);border-bottom:1px solid var(--border);color:var(--primary)}.card-identity{align-items:flex-start;gap:14px}.card-avatar,.card-avatar.featured-avatar{width:38px;height:25px;margin-top:2px;border-radius:999px;background:#ede9e5;color:var(--text-light);font-family:var(--font-meta);font-size:11px;font-weight:600;letter-spacing:.06em}.card-name{color:var(--primary);font-size:32px;font-weight:600;letter-spacing:-.015em}.card-location{color:var(--text-light);font-size:13px}.card-badges{margin-top:10px}.badge,.badge-shortlisted{background:rgba(9,58,62,.06);border:0;color:var(--primary);font-size:10px;font-weight:600}.card-rate-amount{color:var(--highlight);font-size:28px;font-weight:600}.card-rate-period{color:var(--text-light);font-size:10px}.card-body{padding:28px 32px 32px;color:var(--text-primary)}.card-narrative{margin:0 0 26px;padding:18px 22px;background:rgba(9,58,62,.05);border-left:3px solid var(--primary);border-radius:0 8px 8px 0;color:var(--primary);font-size:15px;font-weight:500;line-height:1.65}.card-section-title{margin:28px 0 12px;color:var(--text-light);font-size:10px;font-weight:600;letter-spacing:1.8px}.exp-dot{background:var(--highlight)}.exp-line{background:rgba(9,58,62,.14)}.exp-role{color:var(--primary)}.ctag{background:#f5f3f0;border:1px solid var(--border);color:var(--primary)}.ctag-key{background:rgba(9,58,62,.06);border-color:transparent;color:var(--primary)}.fit-item{background:#f5f3f0;border-color:var(--border)}.bar-fill{background:linear-gradient(90deg,var(--primary),#1d5a5f)}.video-intro-btn{background:transparent;border-color:var(--primary);color:var(--primary)}.video-intro-btn:hover{background:var(--primary);color:#fff}.card-footer{padding:0 32px 32px;background:#fff;border:0}.card-recruiter-note{background:rgba(245,184,0,.08);border-left-color:var(--highlight)}
+.candidate-card{max-width:none;margin:0;padding:0}.card{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 3px rgba(6,40,43,.04),0 4px 12px rgba(6,40,43,.04)}.card.featured{box-shadow:var(--shadow-md)}.card-top{padding:28px 32px 22px;background:linear-gradient(180deg,#f5f3f0,#fff);border-bottom:1px solid var(--border);color:var(--primary)}.card-identity{align-items:flex-start;gap:14px}.card-avatar,.card-avatar.featured-avatar{width:38px;height:25px;margin-top:2px;border-radius:999px;background:#ede9e5;color:var(--text-light);font-family:var(--font-meta);font-size:11px;font-weight:600;letter-spacing:.06em}.card-name{color:var(--primary);font-size:32px;font-weight:600;letter-spacing:-.015em}.card-location{color:var(--text-light);font-size:13px}.card-badges{margin-top:10px}.badge,.badge-shortlisted{background:rgba(9,58,62,.06);border:0;color:var(--primary);font-size:10px;font-weight:600}.badge.tap-badge{background:#f5b800;border:1px solid rgba(9,58,62,.28);color:#093a3e;font-weight:700}.card-rate-amount{color:var(--highlight);font-size:28px;font-weight:600}.card-rate-period{color:var(--text-light);font-size:10px}.card-body{padding:28px 32px 32px;color:var(--text-primary)}.card-narrative{margin:0 0 26px;padding:18px 22px;background:rgba(9,58,62,.05);border-left:3px solid var(--primary);border-radius:0 8px 8px 0;color:var(--primary);font-size:15px;font-weight:500;line-height:1.65}.card-section-title{margin:28px 0 12px;color:var(--text-light);font-size:10px;font-weight:600;letter-spacing:1.8px}.exp-dot{background:var(--highlight)}.exp-line{background:rgba(9,58,62,.14)}.exp-role{color:var(--primary)}.ctag{background:#f5f3f0;border:1px solid var(--border);color:var(--primary)}.ctag-key{background:rgba(9,58,62,.06);border-color:transparent;color:var(--primary)}.fit-item{background:#f5f3f0;border-color:var(--border)}.bar-fill{background:linear-gradient(90deg,var(--primary),#1d5a5f)}.video-intro-btn{background:transparent;border-color:var(--primary);color:var(--primary)}.video-intro-btn:hover{background:var(--primary);color:#fff}.video-intro-btn.btn-tap{background:#f5b800;border-color:#f5b800;color:#093a3e}.video-intro-btn.btn-tap:hover{background:#fff;border-color:#093a3e;color:#093a3e}.card-footer{padding:0 32px 32px;background:#fff;border:0}.card-recruiter-note{background:rgba(245,184,0,.08);border-left-color:var(--highlight)}
 .comparison-section{max-width:none;margin:58px auto 0;padding:0}.comparison-section::before{content:'03 · The comparison';display:block;margin-bottom:8px;color:var(--highlight);font-family:var(--font-meta);font-size:12px;font-weight:500;letter-spacing:2px;text-transform:uppercase}.comparison-section::after{content:'A one-glance comparison after the full candidate profiles.';display:block;margin-top:14px;color:var(--text-light);font-size:13px}.comparison-table-wrap{border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 3px rgba(6,40,43,.04),0 4px 12px rgba(6,40,43,.04)}.comparison-table{background:#fff;color:var(--text-primary);font-size:13.5px}.comparison-table thead th{background:var(--primary);color:#f5f2ed;font-size:10px;font-weight:500;letter-spacing:1.1px}.comparison-table tbody td{border-color:rgba(9,58,62,.08)}.comparison-table .highlight-cell{background:rgba(245,184,0,.08);color:var(--primary)}
 .advisor-section{max-width:760px;margin:0 auto;padding:72px 40px 40px}.advisor-section-label{margin-bottom:18px;color:var(--highlight);font-size:12px;font-weight:500;letter-spacing:2px;text-align:left}.advisor-section-label::before{content:'04 · '}.advisor-card{gap:28px;padding:32px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 3px rgba(6,40,43,.04),0 4px 12px rgba(6,40,43,.04)}.advisor-avatar{width:96px;height:96px;border:0;border-radius:14px}.advisor-label{color:var(--text-light)}.advisor-name{color:var(--primary);font-size:26px;font-weight:600}.advisor-role{color:var(--text-light)}.advisor-summary{color:var(--text-primary)}.sagan-info{max-width:760px}.sagan-stat-number{color:var(--primary)}
 .footer-cta{max-width:1100px;margin:24px auto 0;padding:48px 40px;border-radius:24px;background:var(--primary)}.footer-cta h2{font-size:32px;font-weight:600}.footer-cta strong{color:var(--highlight)}.footer-contact{background:var(--highlight);color:var(--primary)}.site-footer{max-width:1100px;margin:0 auto;background:transparent;border-top:1px solid var(--border);color:var(--text-light)}.site-footer a{color:var(--primary)}
@@ -1753,7 +1767,7 @@ function buildPresentationHTML() {
     .card-rate { text-align: right; }
     .card-rate-amount { font-size: 24px; font-weight: 700; color: var(--highlight); font-family: var(--font-heading); }
     .card-rate-period { font-family: var(--font-meta); font-size: 10px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1px; }
-    .tap-badge { display: inline-flex; align-items: center; gap: 5px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 4px 10px; border-radius: 6px; font-family: var(--font-meta); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
+    .tap-badge { display: inline-flex; align-items: center; gap: 5px; background: #f5b800; color: #093a3e; border: 1px solid rgba(9,58,62,.28); padding: 4px 10px; border-radius: 999px; font-family: var(--font-meta); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; }
 
     .tags-row { padding: 0 44px 16px; display: flex; flex-wrap: wrap; gap: 6px; }
     .tag { display: inline-block; padding: 5px 14px; border-radius: 100px; font-family: var(--font-meta); font-size: 11px; font-weight: 600; }
@@ -1809,7 +1823,7 @@ function buildPresentationHTML() {
     .btn-primary-card { background: var(--primary); color: white; border: 1.5px solid var(--primary); }
     .btn-primary-card:hover { background: var(--primary-dark); }
     .btn-card svg { width: 15px; height: 15px; }
-    .btn-tap { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; }
+    .btn-tap { background: #f5b800; color: #093a3e; border: 1px solid #f5b800; }
 
     .card-recruiter-note { margin: 0; padding: 20px 24px; background: linear-gradient(135deg, ${v.colorPrimary}0d, ${v.colorPrimary}05); border-left: 3px solid var(--primary); border-radius: 0 10px 10px 0; }
     .card-recruiter-note .recruiter-note-title { font-family: var(--font-meta); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--primary); margin-bottom: 8px; }
@@ -2079,7 +2093,7 @@ function generateCandidateCard(c, idx, v) {
                 ${escHTML(c.location || 'Remote')} &middot; ${escHTML(c.experience || '')}
               </div>
               <div class="card-badges">
-                ${c.tap ? '<span class="badge badge-shortlisted">★ TAP Certified</span>' : ''}
+                ${c.tap ? '<span class="badge tap-badge">GTC Candidate</span>' : ''}
                 ${idx === 0 ? '<span class="badge badge-shortlisted">Pre-Shortlisted</span>' : ''}
               </div>
             </div>
@@ -2143,7 +2157,7 @@ function generateCandidateCard(c, idx, v) {
           <div class="card-actions">
             ${/^https?:\/\//i.test(c.videoLink || '') ? `<a class="video-intro-btn" href="${escHTML(c.videoLink)}" target="_blank"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Watch Intro Video</a>` : ''}
             ${/^https?:\/\//i.test(c.portfolioLink || '') ? `<a class="video-intro-btn" href="${escHTML(c.portfolioLink)}" target="_blank"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>View Portfolio</a>` : ''}
-            ${c.tap ? `<a class="video-intro-btn" href="https://drive.google.com/file/d/1lvb0EWiOoIzbKKFGXN0IiuDjdGYOZdHC/view" target="_blank"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>TAP Info</a>` : ''}
+            ${c.tap ? `<a class="video-intro-btn btn-tap" href="https://drive.google.com/file/d/1lvb0EWiOoIzbKKFGXN0IiuDjdGYOZdHC/view" target="_blank" rel="noopener">What is GTC?</a>` : ''}
           </div>
         </div>
 
@@ -2673,7 +2687,7 @@ function generateComparisonTable(cands, v) {
     return (n && minRate && n === minRate) ? 'class="highlight-cell"' : '';
   });
   if (anyTap) {
-    rows.push('<tr><td><strong>TAP</strong></td>' + cands.map(c => `<td>${c.tap ? '<span style="color:var(--primary);font-weight:700;">Yes ★</span>' : 'No'}</td>`).join('') + '</tr>');
+    rows.push('<tr><td><strong>GTC Program</strong></td>' + cands.map(c => `<td>${c.tap ? '<span style="color:var(--primary);font-weight:700;">Yes</span>' : 'No'}</td>`).join('') + '</tr>');
   }
 
   return `
@@ -2942,7 +2956,7 @@ async function generateAINotes() {
   showAIStatus('loading', 'Writing notes...');
 
   // Build all-candidates summary for comparative positioning
-  const allCandsSummary = candidates.map((c, i) => `${i+1}. ${c.name} | ${c.location || '?'} | ${c.experience || '?'} exp | ${c.salary || '?'}/mo | Skills: ${c.skills || '?'} | TAP: ${c.tap ? 'Yes' : 'No'}`).join('\n');
+  const allCandsSummary = candidates.map((c, i) => `${i+1}. ${c.name} | ${c.location || '?'} | ${c.experience || '?'} exp | ${c.salary || '?'}/mo | Skills: ${c.skills || '?'} | GTC program: ${c.tap ? 'Yes' : 'No'}`).join('\n');
 
   for (let i = 0; i < candidates.length; i++) {
     const c = candidates[i];
@@ -2988,7 +3002,7 @@ ALL CANDIDATES IN THIS BATCH (position THIS candidate against them):
 ${allCandsSummary}
 
 THIS CANDIDATE (#${i+1}/${candidates.length}):
-Name: ${c.name.split(' ')[0]} (refer to them by FIRST NAME ONLY — never their last name) | Location: ${c.location || '?'} | Salary: ${fmtSalary(c.salary || v.salaryRange) || '?'} | TAP: ${c.tap ? 'Yes' : 'No'}
+Name: ${c.name.split(' ')[0]} (refer to them by FIRST NAME ONLY — never their last name) | Location: ${c.location || '?'} | Salary: ${fmtSalary(c.salary || v.salaryRange) || '?'} | GTC program: ${c.tap ? 'Yes' : 'No'}
 ANONYMIZATION: Do NOT output the candidate's last name, company/employer names (refer to employers by INDUSTRY only), email, phone, or links.
 PRONOUNS: Never infer gender from a name, photo, country, or resume. Use the candidate's first name or they/them/their only.
 ${c.experience ? 'Experience: ' + c.experience : ''} ${experienceYearsLabel(c.resumeData?.experience) ? '| Experience computed from resume dates: ' + experienceYearsLabel(c.resumeData?.experience) + ' (use THIS number, never estimate your own) ' : ''}${c.skills ? '| Skills: ' + c.skills : ''}
