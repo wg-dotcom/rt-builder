@@ -3235,6 +3235,18 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(existingHTML, 'text/html');
   const batchN = parseInt(v.batchNumber) || 2;
+  const findLegacyCandidateContainer = () => {
+    const selectors = [
+      '.candidates', '.candidate-grid', '.candidates-grid', '.shortlist-grid',
+      '.candidates-section-inner', '.candidates-section', '.candidate-list'
+    ];
+    for (const selector of selectors) {
+      const container = doc.querySelector(selector);
+      if (container && container.querySelector('.candidate-card, .candidate-section, .candidate, .card')) return container;
+    }
+    const firstCard = doc.querySelector('.candidate-card, .candidate-section, .candidate');
+    return firstCard ? firstCard.parentElement : null;
+  };
 
   // ── Inject or refresh batch switcher CSS ──
   let style = doc.querySelector('style[data-batch-switcher]');
@@ -3262,25 +3274,36 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
   // ── Find or create the batch-switcher nav ──
   let switcher = doc.getElementById('batch-switcher');
   if (!switcher) {
-    // Old page without switcher — create it and wrap existing .candidates in batch-1
+    // Old page without switcher — support every previous candidate-container convention.
     switcher = doc.createElement('div');
     switcher.className = 'batch-switcher';
     switcher.id = 'batch-switcher';
     switcher.setAttribute('data-count', '1');
 
-    // Find existing candidates div and wrap it
-    const existingCandidates = doc.querySelector('.candidates');
-    const existingComparison = doc.querySelector('.comparison-section');
-    if (existingCandidates) {
+    const legacyPanels = Array.from(doc.querySelectorAll('.batch-panel'));
+    if (legacyPanels.length) {
+      const firstPanel = legacyPanels[0];
+      firstPanel.parentNode.insertBefore(switcher, firstPanel);
+      switcher.innerHTML = legacyPanels.map((panel, index) => {
+        const number = parseInt((panel.id || '').replace(/\D/g, '')) || index + 1;
+        const count = panel.querySelectorAll('.candidate-card, .candidate-section, .candidate').length;
+        return `<button class="batch-btn ${index === 0 ? 'active' : ''}" onclick="showBatch(${number})" data-batch="${number}"><span>Batch ${number}</span><span class="batch-count">${count}</span></button>`;
+      }).join('');
+    } else {
+      const existingCandidates = findLegacyCandidateContainer();
+      const existingComparison = doc.querySelector('.comparison-section, .comparison-table-wrap');
+      if (!existingCandidates || !existingCandidates.parentNode) {
+        throw new Error('Existing page candidate section was not recognized. Nothing was published.');
+      }
       const panel1 = doc.createElement('div');
       panel1.id = 'batch-1';
       panel1.className = 'batch-panel';
       existingCandidates.parentNode.insertBefore(panel1, existingCandidates);
       panel1.appendChild(existingCandidates);
-      if (existingComparison) panel1.appendChild(existingComparison);
+      if (existingComparison && !panel1.contains(existingComparison)) panel1.appendChild(existingComparison);
 
       // Add batch 1 button to switcher
-      const existingCount = existingCandidates.querySelectorAll('.card').length;
+      const existingCount = existingCandidates.querySelectorAll('.candidate-card, .candidate-section, .candidate').length;
       switcher.innerHTML = `<button class="batch-btn active" onclick="showBatch(1)" data-batch="1"><span>Batch 1</span><span class="batch-count">${existingCount}</span></button>`;
       panel1.parentNode.insertBefore(switcher, panel1);
     }
@@ -3323,7 +3346,10 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
   // Insert new panel after the last existing batch panel (Array pop — :last-of-type misfires when siblings differ)
   const allBatchPanels = Array.from(doc.querySelectorAll('.batch-panel'));
   const lastPanel = allBatchPanels[allBatchPanels.length - 1] || switcher;
-  lastPanel.parentNode.insertBefore(newPanel, lastPanel.nextSibling);
+  const panelHost = lastPanel.parentNode || switcher.parentNode || doc.querySelector('main') || doc.body;
+  if (!panelHost) throw new Error('Existing page has no valid container for the new batch. Nothing was published.');
+  if (lastPanel.parentNode === panelHost) panelHost.insertBefore(newPanel, lastPanel.nextSibling);
+  else panelHost.appendChild(newPanel);
 
   // ── Inject RT card CSS if page was built by a different builder ──
   if (!doc.querySelector('style[data-rt-card-css]')) {
