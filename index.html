@@ -516,9 +516,23 @@ function dedupeCandidates(rows) {
   const output = [];
   const keyToIndex = new Map();
   let removed = 0;
+  let sharedResumeLinks = 0;
   rows.forEach(row => {
     const keys = candidateIdentityKeys(row);
-    const match = keys.map(key => keyToIndex.get(key)).find(index => index !== undefined);
+    let match;
+    for (const key of keys) {
+      const index = keyToIndex.get(key);
+      if (index === undefined) continue;
+      if (key.startsWith('resume:')) {
+        // Same resume link but different names = different people sharing a bad/truncated
+        // link in the sheet (real case: 9 Blanton rows truncated to one identical fragment).
+        const a = normalizeCandidateKey(row.name);
+        const b = normalizeCandidateKey(output[index].name);
+        if (a && b && a !== b) { sharedResumeLinks++; continue; }
+      }
+      match = index;
+      break;
+    }
     if (match === undefined) {
       const index = output.length;
       output.push(row);
@@ -537,7 +551,7 @@ function dedupeCandidates(rows) {
     output[match] = merged;
     candidateIdentityKeys(merged).forEach(key => keyToIndex.set(key, match));
   });
-  return { rows: output, removed };
+  return { rows: output, removed, sharedResumeLinks };
 }
 
 function findSalaryColumn(headers) {
@@ -1500,7 +1514,12 @@ async function pullFromSheet() {
     console.log('Sheet headers:', headers.join(' | '));
     console.log('Matched columns:', cols);
     const duplicateNote = dedupe.removed ? ` Removed ${dedupe.removed} duplicate row${dedupe.removed === 1 ? '' : 's'}.` : '';
-    showStatus('success', `Found ${candidates.length} unique candidate${candidates.length !== 1 ? 's' : ''} (${filters}).${duplicateNote} Columns detected: ${cols}.`);
+    const warnings = [];
+    if (dedupe.sharedResumeLinks) warnings.push(`${dedupe.sharedResumeLinks} row${dedupe.sharedResumeLinks === 1 ? '' : 's'} share a resume link with another candidate (kept separate)`);
+    const badLinks = candidates.filter(c => c.resumeLink && !/^https?:\/\//i.test(c.resumeLink.trim())).length;
+    if (badLinks) warnings.push(`${badLinks} resume link${badLinks === 1 ? '' : 's'} look truncated or invalid (missing https://)`);
+    const warningNote = warnings.length ? ` ⚠ ${warnings.join('; ')}. Check the Resume Link column in the sheet.` : '';
+    showStatus('success', `Found ${candidates.length} unique candidate${candidates.length !== 1 ? 's' : ''} (${filters}).${duplicateNote}${warningNote} Columns detected: ${cols}.`);
 
   } catch (err) {
     showStatus('error', 'Error: ' + err.message);
