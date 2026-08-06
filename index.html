@@ -1489,7 +1489,10 @@ async function pullFromSheet() {
     const experienceIdx = headers.findIndex(h => h.includes('experience') || h.includes('years') || h.includes('seniority') || h.includes('level'));
     const salaryIdx = findSalaryColumn(headers);
     const skillsIdx = headers.findIndex(h => h.includes('skill') || h.includes('tools') || h.includes('tech') || h.includes('stack') || h.includes('competenc') || h.includes('expertise'));
-    const summaryIdx = headers.findIndex(h => h.includes('summary') || h.includes('highlight') || h.includes('about') || h.includes('bio') || h.includes('description') || h.includes('notes') || h.includes('profile'));
+    // Bare "Notes"/"Status" columns are internal tracking ("accepted another offer", "no number");
+    // never surface them as the member-facing summary.
+    const isInternalTrackingCol = h => /(^|\s)(status|internal|tracking)(\s|$)/.test(h) || h === 'notes' || h === 'note';
+    const summaryIdx = headers.findIndex(h => !isInternalTrackingCol(h) && (h.includes('summary') || h.includes('highlight') || h.includes('about') || h.includes('bio') || h.includes('description') || ((h.includes('candidate') || h.includes('presentation')) && h.includes('note')) || h.includes('profile')));
 
     candidates = [];
 
