@@ -243,7 +243,7 @@
       <img src="https://saganrecruitment.com/wp-content/uploads/2025/10/Sagan-Logo-2-e1759568299542.png" alt="Sagan" />
       <span style="opacity:0.3;font-size:18px;">|</span>
       Recruitment Builder
-      <span class="topbar-badge">v1.0</span>
+      <span class="topbar-badge">v1.1</span>
     </div>
     <div class="topbar-actions">
       <button class="btn btn-ghost" onclick="generatePreview()">
@@ -3558,6 +3558,30 @@ function isDarkColor(hex) {
       + '<p style="margin-top:12px;color:#6b7280;font-size:13px;">Hard refresh (Cmd+Shift+R) or report to Jesus.</p>'
       + '</div></div>';
   }
+})();
+
+// Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
+// they report already-fixed bugs. Compare our build stamp against the served page and nag.
+const BUILDER_BUILD_STAMP = '2026-08-07.2';
+(function staleVersionGuard() {
+  async function check() {
+    try {
+      const res = await fetch(location.pathname + '?build-check=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) return;
+      const text = await res.text();
+      const m = text.match(/BUILDER_BUILD_STAMP = '([^']+)'/);
+      if (!m || m[1] === BUILDER_BUILD_STAMP) return;
+      if (document.getElementById('staleVersionBar')) return;
+      const bar = document.createElement('div');
+      bar.id = 'staleVersionBar';
+      bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#F5B800;color:#093A3E;font-weight:700;font-size:13px;text-align:center;padding:10px 16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.15);';
+      bar.textContent = 'This builder tab is outdated. Click here to load the latest version before you pull or deploy.';
+      bar.onclick = () => { location.href = location.pathname + '?v=' + Date.now(); };
+      document.body.appendChild(bar);
+    } catch (e) { /* offline or transient; try again next cycle */ }
+  }
+  check();
+  setInterval(check, 30 * 60 * 1000);
 })();
 </script>
 
