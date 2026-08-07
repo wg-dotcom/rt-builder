@@ -2795,6 +2795,56 @@ async function publisherRequest(path, body, key) {
   return data;
 }
 
+// After a deploy, GitHub Pages still has to build and publish the commit. Normally under a
+// minute, but during GitHub incidents it can take many minutes or silently error, and TAs
+// respond by redeploying in a loop. This watches the live URL until it byte-matches what we
+// deployed, keeps the TA informed, and asks the worker to re-trigger errored/stalled builds.
+let deployWatchToken = 0;
+async function watchDeployGoLive(liveUrl, expectedHtml, repo, publisherKey) {
+  const token = ++deployWatchToken;
+  let statusEl = document.getElementById('deployLiveStatus');
+  if (!statusEl) {
+    const urlField = document.getElementById('deployedUrl');
+    if (!urlField) return;
+    statusEl = document.createElement('div');
+    statusEl.id = 'deployLiveStatus';
+    statusEl.style.cssText = 'margin-top:8px;font-size:12.5px;font-weight:600;line-height:1.5;';
+    urlField.parentElement.appendChild(statusEl);
+  }
+  const started = Date.now();
+  const matches = t => t.length === expectedHtml.length && t.slice(0, 500) === expectedHtml.slice(0, 500) && t.slice(-500) === expectedHtml.slice(-500);
+  let nudges = 0;
+  let lastWorkerCheck = 0;
+  while (Date.now() - started < 15 * 60 * 1000) {
+    if (token !== deployWatchToken) return; // a newer deploy took over
+    try {
+      const res = await fetch(liveUrl + '?live-check=' + Date.now(), { cache: 'no-store' });
+      if (res.ok && matches(await res.text())) {
+        statusEl.style.color = 'var(--green)';
+        statusEl.textContent = '✓ Live on GitHub Pages, verified just now. Safe to share the link.';
+        showToast(`Your page is live and verified:<br><a href="${liveUrl}" target="_blank" style="color:var(--green);font-weight:700;font-size:14px;">${liveUrl}</a>`, 'success');
+        return;
+      }
+    } catch (e) { /* keep polling */ }
+    const mins = Math.floor((Date.now() - started) / 60000);
+    statusEl.style.color = 'var(--text-muted)';
+    statusEl.textContent = `⏳ GitHub is publishing your page (${mins < 1 ? 'under a minute' : mins + ' min'} elapsed). Your deploy is saved. Do NOT deploy again, the page will update on its own.`;
+    const elapsed = Date.now() - started;
+    if (elapsed > (nudges + 1) * 4 * 60 * 1000) {
+      // 4+ minutes without going live: ask GitHub for a fresh build
+      nudges++;
+      try { await publisherRequest('/publish-status', { repo, nudge: true }, publisherKey); } catch (e) {}
+    } else if (elapsed > 60 * 1000 && Date.now() - lastWorkerCheck > 60 * 1000) {
+      // periodic check: worker auto-retriggers when GitHub reports the build errored
+      lastWorkerCheck = Date.now();
+      try { await publisherRequest('/publish-status', { repo, nudge: false }, publisherKey); } catch (e) {}
+    }
+    await new Promise(r => setTimeout(r, 12000));
+  }
+  statusEl.style.color = 'var(--text-muted)';
+  statusEl.textContent = 'GitHub Pages is unusually slow right now (see githubstatus.com). Your deploy IS saved and will appear when GitHub catches up. No need to deploy again.';
+}
+
 function showToast(msg, type) {
   const t = document.getElementById('deployToast');
   const colors = { loading: 'var(--orange)', success: 'var(--green)', error: 'var(--red)' };
@@ -2906,7 +2956,7 @@ async function autoDeploy() {
 
     const liveUrl = deployed.liveUrl;
     const batchMsg = existingHTML ? `Batch ${v.batchNumber} merged into existing page!` : 'Deployed!';
-    showToast(`${batchMsg} Your page will be live in ~60 seconds:<br><a href="${liveUrl}" target="_blank" style="color:var(--green);font-weight:700;font-size:14px;">${liveUrl}</a>`, 'success');
+    showToast(`${batchMsg} GitHub is publishing it now, watching until it's live:<br><a href="${liveUrl}" target="_blank" style="color:var(--green);font-weight:700;font-size:14px;">${liveUrl}</a>`, 'success');
 
     // Show the deployed URL in a persistent field
     let urlField = document.getElementById('deployedUrl');
@@ -2918,6 +2968,7 @@ async function autoDeploy() {
       urlField = document.getElementById('deployedUrl');
     }
     urlField.value = liveUrl;
+    watchDeployGoLive(liveUrl, generatedHTML, repo, publisherKey);
 
   } catch(err) {
     // If the limited publisher key was rejected, clear it and offer a one-time retry.
