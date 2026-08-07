@@ -1495,6 +1495,8 @@ async function pullFromSheet() {
     const summaryIdx = headers.findIndex(h => !isInternalTrackingCol(h) && (h.includes('summary') || h.includes('highlight') || h.includes('about') || h.includes('bio') || h.includes('description') || ((h.includes('candidate') || h.includes('presentation')) && h.includes('note')) || h.includes('profile')));
 
     candidates = [];
+    let companyMatches = 0;
+    const batchesSeen = new Set(), titlesSeen = new Set();
 
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
@@ -1509,6 +1511,11 @@ async function pullFromSheet() {
 
       // Apply filters (all must match if provided)
       if (filterCompany && !company.toLowerCase().includes(filterCompany)) continue;
+      // Track what THIS company's rows actually contain, so a zero-match pull can say
+      // which filter eliminated everything instead of a bare "Found 0".
+      companyMatches++;
+      if (batch) batchesSeen.add(batch);
+      if (title) titlesSeen.add(title);
       if (filterBatch) {
         // Check dedicated batch column first, then fall back to looking in company name
         const batchMatch = batch ? batch.toLowerCase().includes(filterBatch) : company.toLowerCase().includes('batch ' + filterBatch);
@@ -1531,6 +1538,21 @@ async function pullFromSheet() {
         summary: summaryIdx >= 0 ? (row[summaryIdx] || '').trim() : '',
         recruiterNote: ''
       });
+    }
+
+    if (!candidates.length && filterCompany) {
+      if (!companyMatches) {
+        showStatus('error', `No rows in the sheet match company "${filterCompany}". Check the spelling against the Company Name column in the sheet.`);
+        return;
+      }
+      const parts = [];
+      if (filterBatch) parts.push(`batch ${filterBatch}`);
+      if (filterTitle) parts.push(`title "${filterTitle}"`);
+      const have = [];
+      if (batchesSeen.size) have.push(`batch ${[...batchesSeen].join(', ')}`);
+      if (titlesSeen.size) have.push(`title ${[...titlesSeen].map(t => '"' + t + '"').join(', ')}`);
+      showStatus('error', `${companyMatches} row${companyMatches === 1 ? '' : 's'} in the sheet match "${filterCompany}", but none match ${parts.join(' + ') || 'your filters'}. That company's rows have ${have.join(' and ') || 'no batch/title values'}. Fix the Batch Number or Role on the Customer tab (or fix the sheet) and pull again.`);
+      return;
     }
 
     const dedupe = dedupeCandidates(candidates);
@@ -3562,7 +3584,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-07.2';
+const BUILDER_BUILD_STAMP = '2026-08-07.3';
 (function staleVersionGuard() {
   async function check() {
     try {
