@@ -3365,6 +3365,67 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
     return firstCard ? firstCard.parentElement : null;
   };
 
+  // ── Legacy pages with their OWN tab system: join it, never replace it ──
+  // Pages like rubicon-client-service-associate use .batch-tabs + switchBatch() + .batch-panel.active.
+  // Injecting our switcher and display:block!important on top created two competing tab bars and
+  // stacked every batch at once. This broke live member pages three times (Jul-Aug 2026).
+  const legacyTabBar = doc.querySelector('.batch-tabs');
+  const legacyUsesSwitchBatch = /function\s+switchBatch\s*\(/.test(existingHTML);
+  if (legacyTabBar && legacyUsesSwitchBatch) {
+    const panelId = `batch-${batchN}`;
+    const allLegacyCards = doc.querySelectorAll('.batch-panel .card, .batch-panel .candidate-card');
+    const samePanel = doc.getElementById(panelId) || doc.getElementById(`batch${batchN}`);
+    const cardsInSame = samePanel ? samePanel.querySelectorAll('.card, .candidate-card').length : 0;
+    const legacyStartIdx = allLegacyCards.length - cardsInSame;
+    if (samePanel) samePanel.remove();
+
+    const panel = doc.createElement('div');
+    panel.id = panelId;
+    panel.className = 'batch-panel'; // native convention: hidden unless .active
+    panel.innerHTML = `
+    <div class="candidates">
+      ${newCandidates.map((c, i) => generateCandidateCard(c, legacyStartIdx + i, v)).join('')}
+    </div>
+    ${generateComparisonTable(newCandidates, v)}
+  `;
+    const nativePanels = Array.from(doc.querySelectorAll('.batch-panel'));
+    const lastNative = nativePanels[nativePanels.length - 1];
+    if (!lastNative || !lastNative.parentNode) throw new Error('Existing page has no batch panels to attach to. Nothing was published.');
+    lastNative.parentNode.insertBefore(panel, lastNative.nextSibling);
+
+    // tab button in the NATIVE bar, cloning its own markup convention
+    let nativeBtn = Array.from(legacyTabBar.querySelectorAll('.batch-tab')).find(b => {
+      const oc = b.getAttribute('onclick') || '';
+      return oc.includes(`'${panelId}'`) || oc.includes(`'batch${batchN}'`);
+    });
+    if (!nativeBtn) {
+      nativeBtn = doc.createElement('button');
+      nativeBtn.className = 'batch-tab';
+      legacyTabBar.appendChild(nativeBtn);
+    }
+    nativeBtn.setAttribute('onclick', `switchBatch('${panelId}', this)`);
+    const countClass = legacyTabBar.querySelector('.batch-tab-count') ? 'batch-tab-count' : 'batch-count';
+    nativeBtn.innerHTML = ` Batch ${batchN} <span class="${countClass}">${newCandidates.length}</span>`;
+
+    // exactly one active panel + tab so the initial view works
+    if (!doc.querySelector('.batch-panel.active')) {
+      const firstPanel = doc.querySelector('.batch-panel');
+      if (firstPanel) firstPanel.classList.add('active');
+    }
+    if (!legacyTabBar.querySelector('.batch-tab.active')) {
+      const firstTab = legacyTabBar.querySelector('.batch-tab');
+      if (firstTab) firstTab.classList.add('active');
+    }
+
+    // our cards still need their own scoped CSS, but never the canonical page theme
+    ensureCardCSS();
+
+    const legacyBatchNum = doc.querySelector('.batch-num');
+    if (legacyBatchNum) legacyBatchNum.textContent = `Batches 1-${batchN}`;
+
+    return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+  }
+
   // ── Inject or refresh batch switcher CSS ──
   let style = doc.querySelector('style[data-batch-switcher]');
   if (!style) {
@@ -3469,7 +3530,10 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
   else panelHost.appendChild(newPanel);
 
   // ── Inject RT card CSS if page was built by a different builder ──
-  if (!doc.querySelector('style[data-rt-card-css]')) {
+  ensureCardCSS();
+
+  function ensureCardCSS() {
+    if (doc.querySelector('style[data-rt-card-css]')) return;
     const cardStyle = doc.createElement('style');
     cardStyle.setAttribute('data-rt-card-css', '1');
     cardStyle.textContent = `.card-header{display:flex;align-items:flex-start;gap:16px;padding:24px 28px 16px}.rank-badge{width:36px;height:36px;background:var(--primary,#212529);color:white;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0}.card-name-block .card-name{font-size:22px;font-weight:800}.card-meta-row{display:flex;gap:16px;margin-top:6px;flex-wrap:wrap}.card-meta-item{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text-light,#6b7280)}.card-meta-item svg{width:14px;height:14px}.card-meta-item strong{color:var(--text-dark,#1a1a2e)}.tags-row{padding:0 28px 16px;display:flex;flex-wrap:wrap;gap:6px}.tag{display:inline-block;padding:5px 14px;border-radius:100px;font-size:12px;font-weight:600}.tag-filled{background:var(--tag-bg,#e9e9ea);color:var(--tag-color,#1e2125)}.tag-outlined{background:transparent;color:var(--text-mid,#374151);border:1.5px solid #ddd}.card-body-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;border-top:1px solid #f0f0f0;padding-top:20px;margin:0 28px 20px}.card-section{margin-bottom:0}.exp-entry .exp-role{font-weight:700;font-size:14px;color:var(--text-dark,#1a1a2e)}.exp-entry .exp-company{font-size:13px;color:var(--primary,#212529);font-weight:500}.exp-entry .exp-dates{font-size:12px;color:var(--text-light,#6b7280);margin-top:2px}.strength-list{padding-left:18px}.strength-list li{font-size:14px;color:var(--text-mid,#374151);margin-bottom:8px;line-height:1.6}.card-footer{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;background:#fafafa;border-top:1px solid #f0f0f0}.footer-note{font-size:13px;color:var(--text-light,#6b7280)}.footer-note strong{color:var(--text-dark,#1a1a2e)}.btn-group{display:flex;gap:8px}.btn-card{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;transition:all .15s;cursor:pointer}.btn-outline{background:white;color:var(--primary,#212529);border:1.5px solid var(--primary,#212529)}.btn-outline:hover{background:var(--tag-bg,#e9e9ea)}.btn-primary-card{background:var(--primary,#212529);color:white;border:1.5px solid var(--primary,#212529)}.btn-primary-card:hover{background:var(--primary-dark,#1c1f23)}.btn-card svg{width:15px;height:15px}.card-recruiter-note{margin:0 28px 20px;padding:16px 20px;background:#f4f4f4;border-radius:10px;border-left:3px solid var(--primary,#212529)}.card-recruiter-note .recruiter-note-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--primary,#212529);margin-bottom:8px}.card-recruiter-note p{font-size:14px;color:var(--text-mid,#374151);line-height:1.7}@media(max-width:768px){.card-header{flex-direction:column}.card-body-grid{grid-template-columns:1fr}}`;
@@ -3584,7 +3648,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-07.3';
+const BUILDER_BUILD_STAMP = '2026-08-11.1';
 (function staleVersionGuard() {
   async function check() {
     try {
