@@ -2739,7 +2739,14 @@ function generateComparisonTable(cands, v) {
   addRow('Industries', cands.map(c => (c.resumeData && c.resumeData.experience && c.resumeData.experience.length)
     ? [...new Set(c.resumeData.experience.map(e => e.industry).filter(Boolean))].slice(0, 3).join(', ')
     : (c.resumeData?.projects?.length ? 'Independent projects' : '')));
-  addRow('Core Strength', cands.map(c => (c.skills || '').split(',').slice(0, 3).map(s => s.trim()).filter(Boolean).join(', ')));
+  // Core Strength must not duplicate the tools row: use the AI note's top-scored strengths
+  // when available (contextual to the role), and only fall back to skills without them.
+  addRow('Core Strength', cands.map(c => {
+    if (c.strengthScores && Object.keys(c.strengthScores).length) {
+      return Object.entries(c.strengthScores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k).join(', ');
+    }
+    return (c.skills || '').split(',').slice(0, 3).map(s => s.trim()).filter(Boolean).join(', ');
+  }));
   addRow('HRIS / Tools', cands.map(c => (c.skills || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 5).join(', ')));
   addRow('Languages', cands.map(c => (c.resumeData && c.resumeData.languages && c.resumeData.languages.length)
     ? c.resumeData.languages.map(l => l.name).filter(Boolean).join(', ')
@@ -3648,7 +3655,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-11.1';
+const BUILDER_BUILD_STAMP = '2026-08-21.1';
 (function staleVersionGuard() {
   async function check() {
     try {
