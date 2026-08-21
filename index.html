@@ -1917,10 +1917,6 @@ function applyPreviewEditsToMergedPage(targetHTML, editedHTML, batchNumber) {
   const targetPanel = target.getElementById('batch-' + batchNumber);
   const editedPanel = edited.getElementById('batch-' + batchNumber);
   if (targetPanel && editedPanel) targetPanel.innerHTML = editedPanel.innerHTML;
-  ['.hero-sub','.editorial-text','.advisor-name','.advisor-role','.advisor-summary','.footer-cta'].forEach(selector => {
-    const to = target.querySelector(selector), from = edited.querySelector(selector);
-    if (to && from) to.innerHTML = from.innerHTML;
-  });
   return '<!DOCTYPE html>\n' + target.documentElement.outerHTML;
 }
 
@@ -1941,6 +1937,8 @@ body{background:var(--bg-page);color:var(--text-primary);font-family:var(--font-
 
 const GORASCAL_TEMPLATE_CSS = `
 :root{--cream:#F5F2ED;--paper:#FFFCF7;--glacier:#093A3E;--dandelion:#F5B800;--ink:#122E30;--muted:#657170;--line:#D8D4CC;--primary:#093A3E;--dark:#093A3E;--highlight:#F5B800;--bg-page:#F5F2ED;--bg-card:#FFFCF7;--bg-subtle:#F5F2ED;--text-primary:#122E30;--text-mid:#122E30;--text-light:#657170;--border:#D8D4CC;--border-strong:#C3BFB7;--font-heading:'Plus Jakarta Sans',sans-serif;--font-body:'Space Grotesk',sans-serif;--font-meta:'Fragment Mono',monospace;--shadow-md:none}body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--font-body);line-height:1.55}.fade-in{opacity:1;transform:none}.hero-top-bar{display:none}.hero{max-width:none;margin:0;padding:0 0 62px;background:var(--cream);color:var(--ink);border:0}.hero::before{display:none}.hero-inner{width:min(1160px,calc(100% - 40px));max-width:none;margin:auto;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.75fr);column-gap:42px}.hero-brand{grid-column:1/-1;min-height:68px;margin:0 0 72px;border-bottom:1px solid var(--line)}.hero-brand .logo-img{height:26px;max-width:150px;filter:none}.hero-brand .logo-sep{display:none}.hero-brand .logo-sub{margin-left:auto;color:var(--muted);font:12px var(--font-meta)}.hero-eyebrow{grid-column:1;display:flex;align-items:center;gap:9px;width:auto;margin:0 0 20px;padding:0;background:none;border:0;color:#14555A;font:600 12px var(--font-body);letter-spacing:.12em}.hero-eyebrow::before{content:'';width:28px;height:3px;background:var(--dandelion)}.hero h1{grid-column:1;max-width:760px;margin:0 0 22px;color:var(--ink);font:800 clamp(44px,7vw,78px)/1.04 var(--font-heading);letter-spacing:-.045em}.hero h1 strong,.hero h1 em{color:inherit;font:inherit}.hero h1 em{display:none}.hero-sub{grid-column:1;max-width:710px;margin:0;color:var(--muted);font-size:19px}.hero-meta{grid-column:2;grid-row:2/5;align-self:end;display:grid;gap:0;padding:26px;background:var(--paper);border:1px solid var(--line);border-radius:22px}.hero-meta::before{content:'Role at a glance';margin-bottom:14px;color:var(--muted);font-size:12px;letter-spacing:.1em;text-transform:uppercase}.hero-meta-item{display:flex;flex-direction:row;justify-content:space-between;gap:14px;padding:12px 0;border-top:1px solid var(--line)}.hero-meta-label{color:var(--muted);font:12px var(--font-body);letter-spacing:0;text-transform:none}.hero-meta-value{color:var(--ink);font:600 13px var(--font-body);text-align:right}.editorial{max-width:none;margin:0 0 76px;padding:32px max(20px,calc((100% - 1160px)/2));background:var(--glacier);color:#fff}.editorial-label{margin-bottom:20px;color:var(--dandelion);font:600 11px var(--font-body)}.fit-strip-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(255,255,255,.18)}.priority-item{min-height:118px;padding:22px;background:var(--glacier)}.priority-item span{display:block;margin-bottom:12px;color:var(--dandelion);font:22px var(--font-meta)}.priority-item p{margin:0;color:#fff;font:14px/1.55 var(--font-body)}.candidates-section{width:min(1160px,calc(100% - 40px));max-width:none;margin:auto;padding:0 0 76px;background:transparent}.candidates-header{margin:0 0 34px;padding:0;border:0;text-align:left}.candidates-header::before{display:none}.candidates-header h2{margin:0;color:var(--ink);font:800 clamp(34px,5vw,56px)/1.08 var(--font-heading);letter-spacing:-.04em}.candidates-header p{display:none}.batch-switcher{justify-content:flex-start;margin:0 0 28px;padding:0}.batch-btn{border:1px solid var(--line);border-radius:999px;background:var(--paper);font-family:var(--font-body)}.batch-btn.active{background:var(--glacier);border-color:var(--glacier)}.batch-count,.batch-btn.active .batch-count{background:var(--dandelion);color:var(--glacier)}.candidate-card{max-width:none;margin:0 0 28px;padding:0}.card,.card.featured{overflow:hidden;background:var(--paper);border:1px solid var(--line);border-radius:28px;box-shadow:none}.card:hover{transform:none;box-shadow:none}.card-top{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,.75fr);gap:30px;padding:34px;background:var(--paper);border:0;color:var(--ink)}.card-identity{align-items:flex-start;gap:14px}.card-avatar,.card-avatar.featured-avatar{width:42px;height:28px;margin-top:5px;border-radius:999px;background:#EDE9E3;color:var(--muted);font:600 11px var(--font-meta)}.card-name{margin:0 0 8px;color:var(--ink);font:800 clamp(31px,4vw,46px)/1.08 var(--font-heading);letter-spacing:-.04em}.card-location{color:var(--muted);font-size:14px}.badge,.badge-shortlisted{background:#fff;border:1px solid var(--line);color:var(--glacier)}.score-box{display:grid;grid-template-columns:1fr 1fr;align-self:stretch;overflow:hidden;background:var(--cream);border:1px solid var(--line);border-radius:18px}.score-cell{padding:18px}.score-cell:nth-child(even){border-left:1px solid var(--line)}.score-cell:nth-child(n+3){border-top:1px solid var(--line)}.score-label{display:block;margin-bottom:7px;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase}.score-value{display:block;color:var(--ink);font:14px/1.3 var(--font-meta)}.card-body{padding:0 34px 34px;color:var(--ink)}.card-narrative{margin:0 0 26px;padding:0;background:none;border:0;color:var(--muted);font:17px/1.6 var(--font-body);font-style:normal}.card-section-title{margin:28px 0 14px;color:var(--ink);font:700 15px var(--font-heading);letter-spacing:0;text-transform:none}.exp-dot{width:7px;height:7px;background:var(--dandelion)}.exp-line{background:var(--line)}.exp-role{color:var(--ink)}.exp-company,.exp-period,.exp-highlight-list{color:var(--muted)}.ctag,.ctag-key{padding:8px 11px;background:#fff;border:1px solid var(--line);border-radius:999px;color:var(--ink);font:12px var(--font-body)}.fit-grid{grid-template-columns:1fr 1fr}.fit-item{padding:16px;background:var(--cream);border:1px solid var(--line);border-radius:14px}.fit-label,.bar-label{color:var(--muted);font-family:var(--font-body)}.bar-track{background:#E6E1DA}.bar-fill{background:var(--glacier)}.card-actions{margin-top:28px;padding:22px 0 0;border-top:1px solid var(--line)}.video-intro-btn{min-height:46px;padding:11px 18px;border:1px solid var(--glacier);border-radius:999px;background:var(--dandelion);color:var(--glacier);font:600 14px var(--font-body)}.video-intro-btn:hover{background:var(--glacier);color:#fff}.cv{margin-top:18px;background:var(--cream);border:1px solid var(--line);border-radius:18px}.cv summary{width:max-content;min-height:46px;display:flex;align-items:center;padding:11px 18px;color:var(--glacier);font:600 14px var(--font-body)}.cv[open] summary{background:var(--glacier);border-radius:999px;color:#fff}.cv-body{margin:0 18px 18px;padding:20px;background:var(--paper);border:1px solid var(--line);border-radius:14px}.card-footer{padding:0 34px 34px;background:var(--paper);border:0}.card-recruiter-note{background:rgba(245,184,0,.08);border-left-color:var(--dandelion)}.comparison-section{max-width:none;margin:54px auto 0;padding:76px 0 0;border-top:1px solid var(--line)}.comparison-section::before{content:'Side-by-side';display:block;margin-bottom:10px;color:#14555A;font-size:12px;letter-spacing:.12em;text-transform:uppercase}.comparison-section::after{display:none}.section-label h2,.cmp-title{margin:0 0 24px;color:var(--ink);font:800 clamp(32px,4vw,48px)/1.08 var(--font-heading);letter-spacing:-.04em;text-align:left;text-transform:none}.comparison-table-wrap{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:22px;box-shadow:none}.comparison-table{min-width:900px;background:var(--paper);color:var(--ink)}.comparison-table thead th{padding:17px 16px;background:var(--glacier);color:#fff;font:700 12px var(--font-heading);letter-spacing:0;text-transform:none}.comparison-table tbody td{padding:17px 16px;border-right:1px solid var(--line)}.comparison-table tbody tr:nth-child(even) td{background:#F0ECE6}.advisor-section{width:min(1160px,calc(100% - 40px));max-width:none;margin:auto;padding:76px 0 40px}.advisor-section-label{color:#14555A;text-align:left}.advisor-section-label::before{display:none}.advisor-card{display:grid;grid-template-columns:112px minmax(0,1fr);gap:24px;align-items:center;padding:28px;background:var(--glacier);border:0;border-radius:26px;box-shadow:none;color:#fff}.advisor-avatar{width:112px;height:112px;border:3px solid var(--dandelion);border-radius:50%}.advisor-name{color:#fff;font:700 30px var(--font-heading)}.advisor-role,.advisor-summary{color:rgba(255,255,255,.74)}.sagan-info{display:none}.footer-cta{width:min(1160px,calc(100% - 40px));max-width:none;margin:20px auto 0;padding:46px 40px;background:var(--glacier);border-radius:24px}.footer-cta strong{color:var(--dandelion)}.footer-contact{background:var(--dandelion);border-radius:999px;color:var(--glacier)}.site-footer{width:min(1160px,calc(100% - 40px));max-width:none;margin:auto;padding:24px 0 46px;background:transparent;border-top:1px solid var(--line);color:var(--muted)}@media(max-width:850px){.hero-inner,.card-top{grid-template-columns:1fr}.hero-meta{grid-column:1;grid-row:auto}.fit-strip-grid{grid-template-columns:1fr 1fr}.fit-grid{grid-template-columns:1fr}}@media(max-width:560px){.hero-inner,.candidates-section,.advisor-section,.footer-cta,.site-footer{width:min(100% - 24px,1160px)}.fit-strip-grid{grid-template-columns:1fr}.score-box{grid-template-columns:1fr}.score-cell:nth-child(even){border-left:0}.score-cell:nth-child(n+2){border-top:1px solid var(--line)}.advisor-card{grid-template-columns:1fr;text-align:center}.advisor-avatar{margin:auto}}
+/* Batch navigation is always visible. Each button carries its batch date. */
+.batch-switcher,.batch-switcher[data-count="1"]{display:flex!important}.batch-btn{flex-wrap:wrap}.batch-date{width:100%;font-size:10px;font-weight:500;opacity:.72}
 `;
 
 function buildPresentationHTML() {
@@ -2061,8 +2059,9 @@ function buildPresentationHTML() {
     .candidates-header p { font-family: var(--font-meta); font-size: 14px; color: var(--text-light); }
 
     .batch-switcher { display: flex; justify-content: center; align-items: center; gap: 8px; margin: 0 auto 40px; max-width: 800px; padding: 0 24px; }
-    .batch-switcher[data-count="1"] { display: none; }
-    .batch-btn { display: flex; align-items: center; gap: 8px; padding: 11px 22px; border: 2px solid var(--border); border-radius: 10px; background: var(--bg-card); font-family: var(--font-meta); font-size: 13px; font-weight: 600; color: var(--text-light); cursor: pointer; transition: all 0.2s ease; }
+    .batch-switcher[data-count="1"] { display: flex; }
+    .batch-btn { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 11px 22px; border: 2px solid var(--border); border-radius: 10px; background: var(--bg-card); font-family: var(--font-meta); font-size: 13px; font-weight: 600; color: var(--text-light); cursor: pointer; transition: all 0.2s ease; }
+    .batch-date { width: 100%; font-size: 10px; font-weight: 500; opacity: 0.78; }
     .batch-btn:hover { border-color: var(--primary); color: var(--text-primary); }
     .batch-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
     .batch-count { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: white; font-size: 11px; font-weight: 700; }
@@ -2263,13 +2262,14 @@ function buildPresentationHTML() {
     </div>
 
     <div class="batch-switcher" id="batch-switcher" data-count="1">
-      <button class="batch-btn active" onclick="showBatch(${v.batchNumber})" data-batch="${v.batchNumber}">
+      <button class="batch-btn active" onclick="showBatch(${v.batchNumber})" data-batch="${v.batchNumber}" data-batch-date="${escHTML(dateFormatted)}">
         <span>Batch ${v.batchNumber}</span>
         <span class="batch-count">${candidates.length}</span>
+        <span class="batch-date">${escHTML(dateFormatted)}</span>
       </button>
     </div>
 
-    <div id="batch-${v.batchNumber}" class="batch-panel">
+    <div id="batch-${v.batchNumber}" class="batch-panel" data-batch-date="${escHTML(dateFormatted)}">
       <div class="candidates">
         ${candidates.map((c, i) => generateCandidateCard(c, i, v)).join('')}
       </div>
@@ -3158,6 +3158,17 @@ function showToast(msg, type) {
   if (type !== 'loading') setTimeout(() => { t.style.display = 'none'; }, type === 'success' ? 15000 : 8000);
 }
 
+function nextBatchNumberFromHTML(html) {
+  if (!html) return 2;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const numbers = [];
+  doc.querySelectorAll('[data-batch]').forEach(element => numbers.push(parseInt(element.getAttribute('data-batch'), 10)));
+  doc.querySelectorAll('[id^="batch-"]').forEach(element => numbers.push(parseInt(element.id.replace(/\D/g, ''), 10)));
+  doc.querySelectorAll('[id^="batch"]').forEach(element => numbers.push(parseInt(element.id.replace(/\D/g, ''), 10)));
+  const valid = numbers.filter(Number.isFinite);
+  return (valid.length ? Math.max(...valid) : 1) + 1;
+}
+
 async function autoDeploy() {
   commitPreviewEdits();
   const editedPreviewHTML = previewHasEdits ? generatedHTML : '';
@@ -3181,33 +3192,46 @@ async function autoDeploy() {
     if (!publisherKey) publisherKey = await promptPublisherKey('Publisher access is required to deploy.');
     if (!publisherKey) throw new Error('Publisher access key is required.');
 
-    // Check the live repository and download prior content only when merging batches.
+    // Always inspect prior content. The builder must never replace an existing page
+    // with the new template; it can only append a new dated batch.
     const state = await publisherRequest('/state', {
       repo,
-      includeContent: parseInt(v.batchNumber) > 1
+      includeContent: true
     }, publisherKey);
     const repoExists = state.repoExists;
     const fileExistsOnRepo = state.fileExists;
     const sha = state.sha;
     const existingHTML = state.html;
-    let overwriteConfirmed = false;
+    const overwriteConfirmed = false;
 
-    // Prevent an accidental Batch 1 overwrite of a live page.
+    // Existing pages keep their design. Batch 1 is reserved for new pages only.
     if (fileExistsOnRepo && parseInt(v.batchNumber) === 1) {
-      const proceed = confirm(
-        '⚠️ This repo already has content but Batch Number is set to 1.\n\n' +
-        'Deploying now will OVERWRITE the existing page (you will lose previous batches).\n\n' +
-        'Did you mean to bump the Batch Number to 2 (or higher) to add a new batch instead?\n\n' +
-        'OK = overwrite the page (deploy as Batch 1)\n' +
-        'Cancel = stop, let me change the Batch Number'
-      );
-      if (!proceed) {
-        showToast('Deploy stopped. Change the Batch Number in Tab 1, then click Deploy again.', 'error');
-        btn.disabled = false;
-        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg> Deploy';
-        return;
-      }
-      overwriteConfirmed = true;
+      const nextBatch = nextBatchNumberFromHTML(existingHTML);
+      document.getElementById('batchNumber').value = String(nextBatch);
+      updateFilterPreview();
+      showToast(`This page already exists, so I protected its current design. Batch Number is now ${nextBatch}. Pull that batch, regenerate the preview, and deploy again.`, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg> Deploy';
+      return;
+    }
+
+    if (!fileExistsOnRepo && parseInt(v.batchNumber) > 1) {
+      document.getElementById('batchNumber').value = '1';
+      updateFilterPreview();
+      showToast('This is a new page, so its first presentation must be Batch 1. I corrected the number. Regenerate the preview, then deploy again.', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg> Deploy';
+      return;
+    }
+
+    if (fileExistsOnRepo && parseInt(v.batchNumber) > nextBatchNumberFromHTML(existingHTML)) {
+      const nextBatch = nextBatchNumberFromHTML(existingHTML);
+      document.getElementById('batchNumber').value = String(nextBatch);
+      updateFilterPreview();
+      showToast(`Batch numbers must stay in order. I changed this to Batch ${nextBatch}. Pull that batch, regenerate the preview, and deploy again.`, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg> Deploy';
+      return;
     }
 
     // 4a. Extract real resume data BEFORE building cards
@@ -3617,6 +3641,11 @@ function runPublishAudit(html) {
   const tabs = doc.querySelectorAll('.batch-btn').length;
   const panels = doc.querySelectorAll('.batch-panel').length;
   if (tabs && panels && tabs !== panels) issues.push(`Batch tabs (${tabs}) ≠ batch panels (${panels}) — one is orphaned`);
+  const undatedTabs = Array.from(doc.querySelectorAll('.batch-btn')).filter(button => {
+    const text = button.textContent || '';
+    return !/\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b/i.test(text);
+  });
+  if (undatedTabs.length) issues.push(`${undatedTabs.length} batch button(s) are missing a visible date`);
 
   // 8. Never publish after a silent/transient resume fetch failure.
   const resumeFailures = candidates.filter(c => c.resumeLink && c.resumeData?._sourceWarning).map(c => c.name);
@@ -3641,6 +3670,24 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(existingHTML, 'text/html');
   const batchN = parseInt(v.batchNumber) || 2;
+  const datePattern = /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b/i;
+  function inferBatchDate(number, panel) {
+    const direct = panel?.getAttribute('data-batch-date') || '';
+    if (direct) return direct;
+    const sources = [
+      panel?.querySelector('.section-label, .batch-date, [data-batch-date]')?.textContent || '',
+      number === 1 ? (doc.querySelector('.hero-brand .logo-sub')?.textContent || '') : '',
+      number === 1 ? (doc.querySelector('.hero-meta-value')?.textContent || '') : ''
+    ];
+    for (const source of sources) {
+      const match = source.match(datePattern);
+      if (match) return match[0];
+    }
+    return '';
+  }
+  function batchButtonMarkup(number, count, date) {
+    return `<span>Batch ${number}</span><span class="batch-count">${count}</span>${date ? `<span class="batch-date">${escHTML(date)}</span>` : ''}`;
+  }
   // Keep every hero count truthful after a merge: headline "N to consider",
   // "N profiles", and "All N". Batches kept growing while these stayed at batch-1 values.
   function updateHeroCounts() {
@@ -3689,6 +3736,7 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
     const panel = doc.createElement('div');
     panel.id = panelId;
     panel.className = 'batch-panel'; // native convention: hidden unless .active
+    panel.setAttribute('data-batch-date', dateFormatted);
     panel.innerHTML = `
     <div class="candidates">
       ${newCandidates.map((c, i) => generateCandidateCard(c, legacyStartIdx + i, v)).join('')}
@@ -3712,7 +3760,7 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
     }
     nativeBtn.setAttribute('onclick', `switchBatch('${panelId}', this)`);
     const countClass = legacyTabBar.querySelector('.batch-tab-count') ? 'batch-tab-count' : 'batch-count';
-    nativeBtn.innerHTML = ` Batch ${batchN} <span class="${countClass}">${newCandidates.length}</span>`;
+    nativeBtn.innerHTML = `Batch ${batchN} · ${escHTML(dateFormatted)} <span class="${countClass}">${newCandidates.length}</span>`;
 
     // exactly one active panel + tab so the initial view works
     if (!doc.querySelector('.batch-panel.active')) {
@@ -3742,7 +3790,7 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
     doc.head.appendChild(style);
   }
   // Always refresh old deployed pages that may still contain the broken active-based rules.
-  style.textContent = `.batch-switcher{display:flex;justify-content:center;align-items:center;gap:8px;margin:8px auto 36px;max-width:800px;padding:0 24px}.batch-switcher[data-count="1"]{display:none}.batch-btn{display:flex;align-items:center;gap:8px;padding:11px 22px;border:2px solid var(--border,#e2e8f0);border-radius:10px;background:white;font-size:14px;font-weight:600;color:#6b7280;cursor:pointer;transition:all .2s}.batch-btn:hover{border-color:var(--primary)}.batch-btn.active{background:var(--dark,#131a1b);border-color:var(--dark,#131a1b);color:white}.batch-count{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--primary);color:white;font-size:11px;font-weight:700}.batch-btn.active .batch-count{background:var(--highlight,#00f9b8);color:var(--dark,#131a1b)}.batch-panel{display:block !important}.batch-panel.hidden{display:none !important}`;
+  style.textContent = `.batch-switcher{display:flex;justify-content:center;align-items:center;gap:8px;margin:8px auto 36px;max-width:800px;padding:0 24px}.batch-switcher[data-count="1"]{display:flex}.batch-btn{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:11px 22px;border:2px solid var(--border,#e2e8f0);border-radius:10px;background:white;font-size:14px;font-weight:600;color:#6b7280;cursor:pointer;transition:all .2s}.batch-date{width:100%;font-size:10px;font-weight:500;opacity:.72}.batch-btn:hover{border-color:var(--primary)}.batch-btn.active{background:var(--dark,#131a1b);border-color:var(--dark,#131a1b);color:white}.batch-count{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--primary);color:white;font-size:11px;font-weight:700}.batch-btn.active .batch-count{background:var(--highlight,#00f9b8);color:var(--dark,#131a1b)}.batch-panel{display:block !important}.batch-panel.hidden{display:none !important}`;
 
   // ── Normalize legacy panels built with the older .active-based convention ──
   // Old pages toggled visibility with .batch-panel.active; strip stale .active so the new .hidden convention governs.
@@ -3773,7 +3821,9 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
       switcher.innerHTML = legacyPanels.map((panel, index) => {
         const number = parseInt((panel.id || '').replace(/\D/g, '')) || index + 1;
         const count = panel.querySelectorAll('.candidate-card, .candidate-section, .candidate').length;
-        return `<button class="batch-btn ${index === 0 ? 'active' : ''}" onclick="showBatch(${number})" data-batch="${number}"><span>Batch ${number}</span><span class="batch-count">${count}</span></button>`;
+        const date = inferBatchDate(number, panel);
+        if (date) panel.setAttribute('data-batch-date', date);
+        return `<button class="batch-btn ${index === 0 ? 'active' : ''}" onclick="showBatch(${number})" data-batch="${number}"${date ? ` data-batch-date="${escHTML(date)}"` : ''}>${batchButtonMarkup(number, count, date)}</button>`;
       }).join('');
     } else {
       const existingCandidates = findLegacyCandidateContainer();
@@ -3784,27 +3834,42 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
       const panel1 = doc.createElement('div');
       panel1.id = 'batch-1';
       panel1.className = 'batch-panel';
+      const firstDate = inferBatchDate(1, null);
+      if (firstDate) panel1.setAttribute('data-batch-date', firstDate);
       existingCandidates.parentNode.insertBefore(panel1, existingCandidates);
       panel1.appendChild(existingCandidates);
       if (existingComparison && !panel1.contains(existingComparison)) panel1.appendChild(existingComparison);
 
       // Add batch 1 button to switcher
       const existingCount = existingCandidates.querySelectorAll('.candidate-card, .candidate-section, .candidate').length;
-      switcher.innerHTML = `<button class="batch-btn active" onclick="showBatch(1)" data-batch="1"><span>Batch 1</span><span class="batch-count">${existingCount}</span></button>`;
+      switcher.innerHTML = `<button class="batch-btn active" onclick="showBatch(1)" data-batch="1"${firstDate ? ` data-batch-date="${escHTML(firstDate)}"` : ''}>${batchButtonMarkup(1, existingCount, firstDate)}</button>`;
       panel1.parentNode.insertBefore(switcher, panel1);
     }
   }
 
+  // Add any recoverable historical dates without changing the existing page theme.
+  switcher.querySelectorAll('[data-batch]').forEach(button => {
+    if (button.querySelector('.batch-date')) return;
+    const number = parseInt(button.getAttribute('data-batch'), 10);
+    const panel = doc.getElementById(`batch-${number}`);
+    const date = inferBatchDate(number, panel);
+    if (!date) return;
+    button.setAttribute('data-batch-date', date);
+    button.insertAdjacentHTML('beforeend', `<span class="batch-date">${escHTML(date)}</span>`);
+  });
+
   // ── Add or replace batch tab button (dedup) ──
   const existingBtn = switcher.querySelector(`[data-batch="${batchN}"]`);
   if (existingBtn) {
-    existingBtn.innerHTML = `<span>Batch ${batchN}</span><span class="batch-count">${newCandidates.length}</span>`;
+    existingBtn.setAttribute('data-batch-date', dateFormatted);
+    existingBtn.innerHTML = batchButtonMarkup(batchN, newCandidates.length, dateFormatted);
   } else {
     const newBtn = doc.createElement('button');
     newBtn.className = 'batch-btn';
     newBtn.setAttribute('onclick', `showBatch(${batchN})`);
     newBtn.setAttribute('data-batch', String(batchN));
-    newBtn.innerHTML = `<span>Batch ${batchN}</span><span class="batch-count">${newCandidates.length}</span>`;
+    newBtn.setAttribute('data-batch-date', dateFormatted);
+    newBtn.innerHTML = batchButtonMarkup(batchN, newCandidates.length, dateFormatted);
     switcher.appendChild(newBtn);
   }
   switcher.setAttribute('data-count', String(switcher.querySelectorAll('.batch-btn').length));
@@ -3822,6 +3887,7 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
   const newPanel = doc.createElement('div');
   newPanel.id = `batch-${batchN}`;
   newPanel.className = 'batch-panel hidden';
+  newPanel.setAttribute('data-batch-date', dateFormatted);
   newPanel.innerHTML = `
     <div class="candidates">
       ${newCandidates.map((c, i) => generateCandidateCard(c, startIdx + i, v)).join('')}
@@ -3848,14 +3914,9 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
     doc.head.appendChild(cardStyle);
   }
 
-  // Refresh the visual system on legacy and newly merged presentations alike.
-  let canonicalStyle = doc.querySelector('style[data-canonical-shortlist]');
-  if (!canonicalStyle) {
-    canonicalStyle = doc.createElement('style');
-    canonicalStyle.setAttribute('data-canonical-shortlist', '1');
-    doc.head.appendChild(canonicalStyle);
-  }
-  canonicalStyle.textContent = CANONICAL_PRESENTATION_CSS;
+  // Do not inject the current template into an existing page. The existing
+  // presentation keeps its original visual system; this merge only adds the
+  // new dated batch and the minimum controls required to switch batches.
 
   // ── Update hero meta ──
   updateHeroCounts();
@@ -3958,7 +4019,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-21.3';
+const BUILDER_BUILD_STAMP = '2026-08-21.4';
 (function staleVersionGuard() {
   async function check() {
     try {
