@@ -423,6 +423,10 @@
             <label>Quick pain points and priorities</label>
             <textarea id="contextNotes" rows="4" placeholder="What the customer cares about most: urgency, specific needs, dealbreakers..."></textarea>
           </div>
+          <div class="form-group">
+            <label>Industry (safe to mention to candidates)</label>
+            <input type="text" id="industry" placeholder="e.g. home services, SaaS, healthcare" />
+          </div>
         </div>
 
         <div class="form-section">
@@ -442,6 +446,22 @@
           <div class="form-group">
             <label>Schedule / Timezone</label>
             <input type="text" id="schedule" value="Full-time · US hours" />
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">Candidate Outreach Brief</div>
+          <div style="font-size:12px;color:var(--text-dim);line-height:1.5;margin-bottom:12px;">Anonymous role summary for the Bulk Email Sender. Review it before you copy.</div>
+          <div class="form-group">
+            <textarea id="outreachBrief" rows="8" maxlength="1200" placeholder="Generate a private, candidate-facing role brief..." oninput="updateOutreachWordCount()"></textarea>
+            <div style="display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:11px;color:var(--text-dim);">
+              <span id="outreachBriefStatus">Company and contact details are removed.</span>
+              <span><strong id="outreachWordCount">0</strong>/120 words</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-accent" id="generateOutreachBtn" onclick="generateOutreachBrief()" style="flex:1;justify-content:center;">Generate brief</button>
+            <button class="btn btn-ghost" id="copyOutreachBtn" onclick="copyOutreachBrief()" style="flex:1;justify-content:center;">Copy for Bulk Sender</button>
           </div>
         </div>
       </div>
@@ -3158,6 +3178,126 @@ function showToast(msg, type) {
   if (type !== 'loading') setTimeout(() => { t.style.display = 'none'; }, type === 'success' ? 15000 : 8000);
 }
 
+function outreachWordCount(text) {
+  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+function updateOutreachWordCount() {
+  const field = document.getElementById('outreachBrief');
+  const counter = document.getElementById('outreachWordCount');
+  const count = outreachWordCount(field?.value);
+  if (counter) {
+    counter.textContent = String(count);
+    counter.style.color = count > 120 ? 'var(--red)' : count >= 80 ? 'var(--green)' : 'inherit';
+  }
+}
+
+function outreachEscapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function capOutreachWords(text, maximum = 120) {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maximum) return words.join(' ');
+  let shortened = words.slice(0, maximum).join(' ');
+  const sentenceEnd = Math.max(shortened.lastIndexOf('.'), shortened.lastIndexOf('!'), shortened.lastIndexOf('?'));
+  if (sentenceEnd > shortened.length * 0.72) shortened = shortened.slice(0, sentenceEnd + 1);
+  else shortened = shortened.replace(/[,:;.!?]*$/, '') + '.';
+  return shortened;
+}
+
+function sanitizeOutreachBrief(text, maximum = 120) {
+  let safe = String(text || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/https?:\/\/\S+|www\.\S+/gi, ' ')
+    .replace(/\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/g, ' ')
+    .replace(/(?:\+?\d{1,3}[\s().-]*)?(?:\d[\s().-]*){7,14}\d/g, ' ');
+  const privateValues = [
+    document.getElementById('clientName')?.value,
+    document.getElementById('clientContact')?.value,
+    ...candidates.map(candidate => candidate.name)
+  ].map(value => String(value || '').trim()).filter(value => value.length > 2);
+  privateValues.forEach(value => {
+    safe = safe.replace(new RegExp(outreachEscapeRegExp(value), 'gi'), 'the company');
+  });
+  safe = safe
+    .replace(/^\s*(?:subject|email|message|outreach brief)\s*:\s*/i, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/(?:the company\s*){2,}/gi, 'the company ')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+  return maximum ? capOutreachWords(safe, maximum) : safe;
+}
+
+function fallbackOutreachBrief(role, industry, context, salary, schedule) {
+  const safeContext = capOutreachWords(context, 28).replace(/[.!?]*$/, '');
+  const terms = [salary && `The monthly range is ${salary}.`, schedule && `The schedule is ${schedule}.`].filter(Boolean).join(' ');
+  return `We’re hiring a ${role} for a growing ${industry || 'US-based'} business. ${safeContext ? `The role will focus on ${safeContext}.` : 'The role will own key day-to-day priorities and help the team execute consistently.'} You’ll manage the core responsibilities, keep work organized, and communicate clearly with a remote US team. The strongest fit will bring relevant hands-on experience, reliable follow-through, and the judgment to solve problems without constant direction. ${terms} If this matches your background, reply with your availability and a short note about the experience that makes you a strong fit.`;
+}
+
+async function generateOutreachBrief() {
+  const rawRole = document.getElementById('roleTitle').value.trim();
+  if (!rawRole) { showToast('Add the role title before generating the outreach brief.', 'error'); switchTab(0); return; }
+  const role = sanitizeOutreachBrief(rawRole);
+  const industry = sanitizeOutreachBrief(document.getElementById('industry').value.trim());
+  const context = sanitizeOutreachBrief([
+    document.getElementById('contextNotes').value.trim(),
+    document.getElementById('notebookContext').value.trim()
+  ].filter(Boolean).join(' '), 360).slice(0, 2200);
+  const salary = sanitizeOutreachBrief(fmtSalary(document.getElementById('salaryRange').value.trim()) || document.getElementById('salaryRange').value.trim());
+  const schedule = sanitizeOutreachBrief(document.getElementById('schedule').value.trim());
+  const button = document.getElementById('generateOutreachBtn');
+  const status = document.getElementById('outreachBriefStatus');
+  button.disabled = true;
+  button.textContent = 'Generating...';
+  status.textContent = 'Writing an anonymous candidate-facing brief...';
+  const prompt = `Write one candidate-facing outreach paragraph for this open role.
+
+ROLE: ${role}
+INDUSTRY: ${industry || 'not provided'}
+RESPONSIBILITIES AND REQUIREMENTS: ${context || 'not provided'}
+COMPENSATION: ${salary || 'not provided'}
+SCHEDULE: ${schedule || 'not provided'}
+
+Rules:
+- Write 90 to 115 words. Never exceed 120 words.
+- Do not include or invent a company name, contact name, person name, email, phone number, website, or identifying detail.
+- You may mention only the generic industry.
+- Explain the role, its main responsibilities, the strongest requirements, schedule, and compensation when provided.
+- Use plain, natural English. Short sentences. No hype, buzzwords, emojis, headings, bullets, or fake enthusiasm.
+- End with a simple invitation to reply if the role fits their background.
+- Return only the paragraph.`;
+  let brief = '';
+  try {
+    brief = await callAI_premium(prompt, 350);
+  } catch (error) {
+    brief = fallbackOutreachBrief(role, industry, context, salary, schedule);
+  }
+  brief = sanitizeOutreachBrief(brief);
+  if (outreachWordCount(brief) < 55) brief = sanitizeOutreachBrief(fallbackOutreachBrief(role, industry, context, salary, schedule));
+  document.getElementById('outreachBrief').value = brief;
+  updateOutreachWordCount();
+  status.textContent = 'Anonymous and ready for your review.';
+  button.disabled = false;
+  button.textContent = 'Regenerate brief';
+  showToast('Outreach brief ready. Review it, then copy it to the Bulk Email Sender.', 'success');
+}
+
+async function copyOutreachBrief() {
+  const field = document.getElementById('outreachBrief');
+  const brief = sanitizeOutreachBrief(field.value);
+  if (!brief) { showToast('Generate or write the outreach brief first.', 'error'); return; }
+  field.value = brief;
+  updateOutreachWordCount();
+  let copied = false;
+  try { await navigator.clipboard.writeText(brief); copied = true; } catch (error) {
+    field.focus(); field.select(); copied = document.execCommand('copy');
+  }
+  document.getElementById('outreachBriefStatus').textContent = copied ? 'Copied as plain text. No company or contact details.' : 'Select the text and copy it manually.';
+  showToast(copied ? 'Copied for the Bulk Email Sender.' : 'Automatic copy failed. Select the brief and copy it manually.', copied ? 'success' : 'error');
+}
+
 function nextBatchNumberFromHTML(html) {
   if (!html) return 2;
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -4019,7 +4159,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-21.4';
+const BUILDER_BUILD_STAMP = '2026-08-21.5';
 (function staleVersionGuard() {
   async function check() {
     try {
