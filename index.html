@@ -1968,7 +1968,7 @@ const GORASCAL_TEMPLATE_CSS = `
 `;
 
 const PRESENTATION_MEDIA_CSS = `
-.hero-brand{display:flex;align-items:center;gap:16px}.brand-lockup{display:flex;align-items:center;gap:14px;min-width:0}.hero-brand .logo-sep{display:block;width:1px;height:26px;background:var(--line);flex:0 0 auto}.hero-brand .client-logo{width:auto;max-width:150px;height:30px;object-fit:contain}.client-wordmark{display:inline-flex;align-items:center;min-height:30px;max-width:220px;color:var(--glacier);font:700 14px/1.2 var(--font-heading);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.client-wordmark-fallback{display:none}.candidate-video{max-width:620px;margin:30px 0 2px}.candidate-video-label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;color:var(--ink);font:700 15px var(--font-heading)}.candidate-video-label span:last-child{color:var(--muted);font:500 10px var(--font-meta);letter-spacing:.08em;text-transform:uppercase}.candidate-video-frame{position:relative;overflow:hidden;aspect-ratio:16/9;background:var(--glacier);border:1px solid var(--line);border-radius:18px}.candidate-video-frame video,.candidate-video-frame iframe{display:block;width:100%;height:100%;border:0;object-fit:cover;background:var(--glacier)}.candidate-video-fallback{display:flex;align-items:center;justify-content:center;min-height:180px;padding:24px;text-align:center;color:#fff}.candidate-video-fallback a{color:var(--dandelion);font-weight:700}.card-actions:empty{display:none}@media(max-width:560px){.hero-brand{align-items:flex-start;flex-wrap:wrap;padding:14px 0}.hero-brand .logo-sub{width:100%;margin-left:0}.brand-lockup{max-width:100%}.hero-brand .client-logo{max-width:110px;height:26px}.client-wordmark{max-width:150px;font-size:12px}.candidate-video{margin-top:24px}.candidate-video-frame{border-radius:14px}}
+.hero-brand{display:flex;align-items:center;gap:16px}.brand-lockup{display:flex;align-items:center;gap:14px;min-width:0}.hero-brand .logo-sep{display:block;width:1px;height:26px;background:var(--line);flex:0 0 auto}.hero-brand .client-logo{width:auto;max-width:150px;height:30px;object-fit:contain}.client-wordmark{display:inline-flex;align-items:center;min-height:30px;max-width:220px;color:var(--glacier);font:700 14px/1.2 var(--font-heading);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.client-wordmark-fallback{display:none}.candidate-video{max-width:620px;margin:30px 0 2px}.candidate-video-label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;color:var(--ink);font:700 15px var(--font-heading)}.candidate-video-label span:last-child{color:var(--muted);font:500 10px var(--font-meta);letter-spacing:.08em;text-transform:uppercase}.candidate-video-frame{position:relative;overflow:hidden;aspect-ratio:16/9;background:var(--glacier);border:1px solid var(--line);border-radius:18px}.candidate-video-frame video,.candidate-video-frame iframe{display:block;width:100%;height:100%;border:0;object-fit:cover;background:var(--glacier)}.candidate-audio-frame{display:flex;align-items:center;min-height:84px;padding:18px;background:var(--cream);border:1px solid var(--line);border-radius:18px}.candidate-audio-frame audio{width:100%}.candidate-audio-embed{min-height:116px;padding:0;overflow:hidden}.candidate-audio-embed iframe{display:block;width:100%;height:116px;border:0}.card-actions:empty{display:none}@media(max-width:560px){.hero-brand{align-items:flex-start;flex-wrap:wrap;padding:14px 0}.hero-brand .logo-sub{width:100%;margin-left:0}.brand-lockup{max-width:100%}.hero-brand .client-logo{max-width:110px;height:26px}.client-wordmark{max-width:150px;font-size:12px}.candidate-video{margin-top:24px}.candidate-video-frame,.candidate-audio-frame{border-radius:14px}}
 `;
 
 function buildPresentationHTML() {
@@ -2441,7 +2441,8 @@ function candidateVideoSpec(url) {
   const source = String(url || '').trim();
   if (!/^https?:\/\//i.test(source)) return null;
   let match;
-  if (/candidate-video\.com\/uploads\//i.test(source) || /\.(?:mp4|webm|ogg|mov)(?:[?#]|$)/i.test(source)) return { type: 'video', src: source };
+  if (/candidate-video\.com\/uploads\//i.test(source) || /(?:r2\.dev|saganpassport\.com)\/.*(?:uploads\/|video-intro)/i.test(source) || /\.(?:mp4|webm|ogg|mov)(?:[?#]|$)/i.test(source)) return { type: 'video', src: source };
+  if (/\.(?:mp3|mpga|m4a|wav|aac)(?:[?#]|$)/i.test(source) || /prod-fillout[^/]*\.s3[^/]*\.amazonaws\.com\/.*\/audio_/i.test(source)) return { type: 'audio', src: source };
   match = source.match(/drive\.google\.com\/file\/d\/([^/?#]+)/i) || source.match(/[?&]id=([\w-]+)/i);
   if (match) return { type: 'iframe', src: `https://drive.google.com/file/d/${match[1]}/preview` };
   match = source.match(/(?:loom\.com\/(?:share|embed)\/)([a-z0-9-]+)/i);
@@ -2450,9 +2451,9 @@ function candidateVideoSpec(url) {
   if (match) return { type: 'iframe', src: `https://www.youtube-nocookie.com/embed/${match[1]}` };
   match = source.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
   if (match) return { type: 'iframe', src: `https://player.vimeo.com/video/${match[1]}` };
-  match = source.match(/voca\.ro\/(?:embed\/)?([a-z0-9]+)/i);
-  if (match) return { type: 'iframe', src: `https://vocaroo.com/embed/${match[1]}?autoplay=0` };
-  return { type: 'fallback', src: source };
+  match = source.match(/(?:voca\.ro|vocaroo\.com)\/(?:share\/|embed\/)?([a-z0-9]+)/i);
+  if (match) return { type: 'audio-iframe', src: `https://vocaroo.com/embed/${match[1]}?autoplay=0` };
+  return { type: 'unsupported', src: source };
 }
 
 function buildInlineCandidateVideo(url, candidateName) {
@@ -2468,9 +2469,17 @@ function buildInlineCandidateVideo(url, candidateName) {
     markup: `<section class="candidate-video">${heading}<div class="candidate-video-frame"><iframe src="${escHTML(spec.src)}" title="${escHTML(firstName)} candidate introduction" loading="lazy" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div></section>`,
     fallback: ''
   };
+  if (spec.type === 'audio') return {
+    markup: `<section class="candidate-video candidate-audio">${heading}<div class="candidate-audio-frame"><audio controls preload="metadata" controlslist="nodownload" src="${escHTML(spec.src)}">Your browser cannot play this introduction.</audio></div></section>`,
+    fallback: ''
+  };
+  if (spec.type === 'audio-iframe') return {
+    markup: `<section class="candidate-video candidate-audio">${heading}<div class="candidate-audio-frame candidate-audio-embed"><iframe src="${escHTML(spec.src)}" title="${escHTML(firstName)} candidate introduction" loading="lazy" allow="autoplay"></iframe></div></section>`,
+    fallback: ''
+  };
   return {
     markup: '',
-    fallback: `<a class="video-intro-btn" href="${escHTML(spec.src)}" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Watch Intro Video</a>`
+    fallback: ''
   };
 }
 
@@ -2500,6 +2509,7 @@ function generateCandidateCard(c, idx, v) {
   const barSkills = c.strengthScores ? Object.keys(c.strengthScores).slice(0, 6) : skills.slice(0, 6);
   const barScores = c.strengthScores ? Object.values(c.strengthScores).slice(0, 6) : [95, 90, 88, 85, 82, 78];
   const candidateVideo = buildInlineCandidateVideo(c.videoLink, c.name);
+  const introMessage = c.recruiterNote || '';
 
   return `
     <div class="candidate-card">
@@ -2528,9 +2538,9 @@ function generateCandidateCard(c, idx, v) {
         </div>
 
         <div class="card-body">
-          ${c.recruiterNote ? `
+          ${introMessage ? `
           <div class="card-narrative">
-            ${escHTML(c.recruiterNote)}
+            ${escHTML(introMessage)}
           </div>` : ''}
 
           ${expEntries.length ? `
@@ -2576,13 +2586,6 @@ function generateCandidateCard(c, idx, v) {
           ${buildEmbeddedResume(c)}
         </div>
 
-        ${c.detailedNote ? `
-        <div class="card-footer">
-          <div class="card-recruiter-note">
-            <div class="recruiter-note-title">Recruiter Note</div>
-            <p>${escHTML(c.detailedNote)}</p>
-          </div>
-        </div>` : ''}
       </div>
     </div>`;
 }
@@ -3513,7 +3516,7 @@ async function autoDeploy() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// AI-GENERATED RECRUITER NOTES (Claude API)
+// AI-GENERATED CANDIDATE INTRODUCTIONS (Claude API)
 // ═══════════════════════════════════════════════════════════════
 async function generateAINotes() {
   if (candidates.length === 0) {
@@ -3573,7 +3576,7 @@ async function generateAINotes() {
       }
     } catch(e) { console.log('Site context skipped:', e.message); clientSiteContext = ''; }
   }
-  showAIStatus('loading', 'Writing notes...');
+  showAIStatus('loading', 'Writing candidate introductions...');
 
   // Build all-candidates summary for comparative positioning
   const allCandsSummary = candidates.map((c, i) => `${i+1}. ${c.name} | ${c.location || '?'} | ${c.experience || '?'} exp | ${c.salary || '?'}/mo | Skills: ${c.skills || '?'} | GTC program: ${c.tap ? 'Yes' : 'No'}`).join('\n');
@@ -3584,11 +3587,11 @@ async function generateAINotes() {
     if (i > 0) {
       const delay = 3;
       for (let s = delay; s > 0; s--) {
-        showAIStatus('loading', `Writing notes for ${c.name} in ${s}s (${i + 1}/${candidates.length})...`);
+        showAIStatus('loading', `Writing the introduction for ${c.name} in ${s}s (${i + 1}/${candidates.length})...`);
         await new Promise(r => setTimeout(r, 1000));
       }
     }
-    showAIStatus('loading', `Writing notes for ${c.name} (${i + 1}/${candidates.length})...`);
+    showAIStatus('loading', `Writing the introduction for ${c.name} (${i + 1}/${candidates.length})...`);
 
     try {
       const notebookContext = document.getElementById('notebookContext')?.value?.trim() || '';
@@ -3608,7 +3611,7 @@ YOUR WRITING DNA:
 - Mirror the CLIENT'S language. If they say "tickets", you say "tickets". If they say "onboarding", you say "onboarding".
 - Leave ONE plain-spoken rough edge per note, a phrase a polished copywriter would sand off. That's what makes it read human.
 
-GOLD STANDARD (this is the exact register every detailedNote should hit — study the rhythm, the contractions, how facts carry the argument, and the plain-spoken ending):
+GOLD STANDARD (this is the exact register every candidate intro should hit — study the rhythm, the contractions, how facts carry the argument, and the plain-spoken ending):
 "Sam has spent sixteen years one seat away from the CFO. They built the board packages themselves, ran full budget and reforecast cycles, and led a remote FP&A team for three years as Finance Director. So they can build the model and also run the meeting where the model gets questioned. Their 3-statement scenario modeling is the same muscle this role needs for growth planning. They've presented to program managers at a multilateral and regional leads at a global bank, so explaining numbers to people outside finance doesn't scare them."
 
 CLIENT: ${v.clientName} | Role: ${v.roleTitle} | Budget: ${v.salaryRange || '?'} | Schedule: ${v.schedule || 'Full-time, US hours'}
@@ -3647,12 +3650,12 @@ Note: "Andrea doesn't wait for instructions, they build the playbook. At their c
 
 DIFFERENTIATION RULE: Each candidate MUST have a unique angle. NEVER reuse a phrase, label, or opener across candidates in the same batch. If one note opens with years of experience, the next one opens somewhere else.
 ${candidates.slice(0, i).filter(prev => prev.recruiterNote).length ? `
-ALREADY WRITTEN NOTES (DO NOT repeat these phrases, angles, or openers):
+ALREADY WRITTEN INTRODUCTIONS (DO NOT repeat these phrases, angles, or openers):
 ${candidates.slice(0, i).filter(prev => prev.recruiterNote).map(prev => `- ${prev.name}: "${prev.recruiterNote}"`).join('\n')}
 
 You MUST use a completely different angle, different sommelier term, and different opening word than ALL notes above.` : ''}
 
-KEEP IT TIGHT: "why" = exactly 3-5 SHORT bullets separated by \\n. Each bullet is ONE line, max 15 words. Start with a specific fact (tool, number, cert). "note" = 2-3 sentences MAX (under 60 words). No rambling. No filler. "detailedNote" = 3-5 sentences (80-150 words). This is a deeper recruiter analysis. Explain WHY this candidate is the right fit for this specific client. Reference their strongest experience, compare to the batch, and give an honest assessment including trade-offs. This goes in a visible Recruiter Note footer on the card.
+KEEP IT TIGHT: "why" = exactly 3-5 SHORT bullets separated by \\n. Each bullet is ONE line, max 15 words. Start with a specific fact (tool, number, cert). "note" = 3-5 short sentences (60-100 words). This is the only candidate intro shown on the card. Explain why this candidate fits this role. Use facts. No rambling. No filler. Do not label it as a recruiter note.
 
 "fitIndicators" = exactly 3 bullets. Each connects a SPECIFIC candidate skill/experience to a SPECIFIC client pain point or need from the client website/context. Format: "[Candidate fact] → [Why it matters for THIS client]". These appear as client-specific fit indicators on the card.
 
@@ -3663,7 +3666,7 @@ CRITICAL: ONLY reference facts that appear in the VERIFIED RESUME DATA or spread
 Return ONLY valid JSON. No markdown fences. No explanation before or after.
 - "jobs" field: Copy ONLY from VERIFIED RESUME DATA above. Each job has "role", "industry" (the employer's sector, NOT the company name), and "dates" exactly as written. If no verified data, return empty array []. NEVER invent jobs.
 PRONOUN CHECK: Your output must not contain he, she, him, his, her, hers, himself, or herself.
-{"why":"Heavily certified Microsoft specialist: AZ-900, MS-900, AZ-104 in progress\\nLives in the exact DIS environment: remote ticket management, M365 admin daily\\nHandles 50+ tickets/week at current MSP. The bread-and-butter issues eating your time\\n4 years IT support across 2 MSPs. Knows the pace and the tools\\nStrong communicator. Clients at current role rate him 4.8/5 satisfaction","note":"Menard already lives in DIS's world. Four years in MSPs, 50+ tickets a week, M365 and Active Directory cold. Minimal ramp-up, quietly competent from day one.","detailedNote":"Menard is the strongest technical profile in this batch, and it isn't close. Four years in the MSP world handling 50+ tickets weekly across Azure, M365, and Active Directory, which is the exact environment DIS runs. The AZ-104 in progress says they're still investing in their own growth. The trade-off: no client-liaison title yet, so the first month of client-facing polish is on you. Everything else shows up ready. At this rate you're getting enterprise-grade support at mid-market pricing.","experience":"4 yrs IT Support","skills":"Azure, M365, ServiceNow, Active Directory, PowerShell, ITIL","fitIndicators":["AZ-900 + MS-900 certified → DIS runs on Azure/M365 stack, zero ramp-up on core tools","50+ tickets/week at current MSP → Matches DIS's high-volume support model exactly","4.8/5 client satisfaction score → DIS values client-facing communication for their managed services"],"strengthScores":{"Azure":92,"M365 Admin":95,"ServiceNow":85,"Active Directory":88,"Client Communication":90,"ITIL Process":78},"jobs":[{"role":"Service Desk Engineer","industry":"IT Services"},{"role":"IT Support Specialist","industry":"Technology"}]}
+{"why":"AZ-900 and MS-900 certified\\nHandles 50+ tickets each week\\nWorks daily in M365 and Active Directory","note":"Menard already works in the same technical environment this role needs. Four years in MSP support and 50+ weekly tickets show the pace is familiar. M365 and Active Directory are daily tools, not résumé keywords. Minimal ramp-up. Quietly competent from day one.","experience":"4 yrs IT Support","skills":"Azure, M365, ServiceNow, Active Directory, PowerShell, ITIL","fitIndicators":["AZ-900 + MS-900 certified → Ready for the core Microsoft stack","50+ tickets/week → Comfortable with the required support volume","4.8/5 client score → Strong client communication"],"strengthScores":{"Azure":92,"M365 Admin":95,"ServiceNow":85,"Active Directory":88,"Client Communication":90,"ITIL Process":78},"jobs":[{"role":"Service Desk Engineer","industry":"IT Services"},{"role":"IT Support Specialist","industry":"Technology"}]}
 
 IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW content specific to THIS candidate (${c.name}). Use their actual skills, experience, and background. Do NOT copy the example text.`;
 
@@ -3697,9 +3700,9 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
               const m = text.match(new RegExp('"' + key + '"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}])'));
               return m ? m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
             };
-            const why = extract('why'), note = extract('note'), dn = extract('detailedNote'), exp = extract('experience'), sk = extract('skills');
+            const why = extract('why'), note = extract('note'), exp = extract('experience'), sk = extract('skills');
             if (why || note) {
-              parsed = { why, note, detailedNote: dn, experience: exp, skills: sk };
+              parsed = { why, note, experience: exp, skills: sk };
             } else { throw pe; }
           }
         } catch(retryErr) {
@@ -3721,7 +3724,7 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
           if (bullets.length > 0) c.summary = bullets.map(neutralizePronouns).join('\n');
         }
         if (parsed.note && !isGarbage(parsed.note)) c.recruiterNote = neutralizePronouns(parsed.note.length > 400 ? parsed.note.slice(0, 400).replace(/\s+\S*$/, '...') : parsed.note);
-        if (parsed.detailedNote && !isGarbage(parsed.detailedNote)) c.detailedNote = neutralizePronouns(parsed.detailedNote.length > 800 ? parsed.detailedNote.slice(0, 800).replace(/\s+\S*$/, '...') : parsed.detailedNote);
+        c.detailedNote = '';
         if (parsed.experience && !isGarbage(parsed.experience)) c.experience = parsed.experience;
         c.experience = reconcileExperienceLabel(c.experience, c.resumeData) || c.experience;
         // Only update skills if AI returned real data, not placeholders
@@ -3810,6 +3813,21 @@ function runPublishAudit(html) {
   });
   if (brokenBtns.length) issues.push(`${brokenBtns.length} broken video/portfolio button(s): ${brokenBtns.slice(0, 3).join(', ')}${brokenBtns.length > 3 ? '…' : ''}`);
 
+  const recruiterNotes = doc.querySelectorAll('.card-recruiter-note, .recruiter-note-title');
+  if (recruiterNotes.length || /\bRecruiter Note\b/i.test(body)) issues.push('Recruiter notes are visible. Keep only one client-ready introduction on each candidate card.');
+  const introProblems = Array.from(doc.querySelectorAll('.candidate-card')).filter(card => card.querySelectorAll('.card-narrative').length !== 1);
+  if (introProblems.length) issues.push(`${introProblems.length} card(s) do not have exactly one candidate introduction`);
+  const outboundCandidateVideos = Array.from(doc.querySelectorAll('.video-intro-btn')).filter(button => !button.classList.contains('gtc-info-btn') && /intro\s*video/i.test(button.textContent || ''));
+  if (outboundCandidateVideos.length) issues.push(`${outboundCandidateVideos.length} candidate intro video(s) open as a button instead of playing inline`);
+  const unsupportedVideos = candidates.filter(candidate => candidate.videoLink && candidateVideoSpec(candidate.videoLink)?.type === 'unsupported').map(candidate => candidate.name);
+  if (unsupportedVideos.length) issues.push(`${unsupportedVideos.length} intro video link(s) cannot be embedded safely: ${unsupportedVideos.slice(0, 4).join(', ')}${unsupportedVideos.length > 4 ? '…' : ''}`);
+  const missingInlineMedia = candidates.filter((candidate, index) => {
+    const spec = candidateVideoSpec(candidate.videoLink);
+    if (!spec || spec.type === 'unsupported') return false;
+    return !doc.querySelectorAll('.candidate-card')[index]?.querySelector('.candidate-video video, .candidate-video iframe, .candidate-video audio');
+  }).map(candidate => candidate.name);
+  if (missingInlineMedia.length) issues.push(`${missingInlineMedia.length} valid candidate introduction(s) are not embedded inline: ${missingInlineMedia.slice(0, 4).join(', ')}`);
+
   const emptyPanels = [];
   doc.querySelectorAll('.batch-panel').forEach(panel => {
     if (panel.querySelectorAll('.candidate-card, .card').length === 0) emptyPanels.push(panel.id || '(unnamed)');
@@ -3848,7 +3866,7 @@ function runPublishAudit(html) {
   if (qualityFailures.length) issues.push(`${qualityFailures.length} resume extraction(s) need review: ${qualityFailures.slice(0, 3).join(' | ')}${qualityFailures.length > 3 ? '…' : ''}`);
 
   // 9. Catch accidental gender inference in generated recruiter copy.
-  const genderedCopy = Array.from(doc.querySelectorAll('.card-narrative, .card-recruiter-note'))
+  const genderedCopy = Array.from(doc.querySelectorAll('.card-narrative'))
     .filter(el => /\b(?:he|she|him|his|her|hers|himself|herself)\b/i.test(el.textContent || ''));
   if (genderedCopy.length) issues.push(`${genderedCopy.length} generated note(s) contain gendered pronouns — use the candidate name or they/them`);
 
@@ -4211,7 +4229,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-21.9';
+const BUILDER_BUILD_STAMP = '2026-08-21.10';
 (function staleVersionGuard() {
   async function check() {
     try {
