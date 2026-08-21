@@ -246,7 +246,7 @@
       <img src="https://saganrecruitment.com/wp-content/uploads/2025/10/Sagan-Logo-2-e1759568299542.png" alt="Sagan" />
       <span style="opacity:0.3;font-size:18px;">|</span>
       Recruitment Builder
-      <span class="topbar-badge">v1.1</span>
+      <span class="topbar-badge">v2.0</span>
     </div>
     <div class="topbar-actions">
       <span class="preview-edit-status" id="previewEditStatus">Preview text is locked</span>
@@ -1677,7 +1677,14 @@ function addManualCandidate() {
 // ═══════════════════════════════════════════════════════════════
 // TEMPLATE GENERATOR
 // ═══════════════════════════════════════════════════════════════
-function generatePreview() {
+async function generatePreview() {
+  // Build the preview from the same enriched data that will be published. This
+  // prevents a TA from editing a thin spreadsheet-only card and then seeing a
+  // materially different résumé after Deploy runs the extraction step.
+  if (candidates.some(c => !c.resumeData)) {
+    showAIStatus('loading', 'Preparing the candidate résumés before preview...');
+    await generateResumeData();
+  }
   generatedHTML = buildPresentationHTML();
   previewEditBase = generatedHTML;
   previewEditHistory = [generatedHTML];
@@ -1710,7 +1717,7 @@ function serializePreviewDocument() {
 }
 function markPreviewText(enabled) {
   const doc = getPreviewDocument(); if (!doc) return false;
-  const selectors = ['.hero-sub','.priority-item p','.card-name','.card-location','.score-value','.card-narrative','.exp-role','.exp-company','.fit-label','.bar-label','.card-recruiter-note p','.cv-summary','.cv-role','.cv-company','.cv-bullets li','.comparison-table th','.comparison-table td','.advisor-name','.advisor-role','.advisor-summary','.footer-cta h2','.footer-cta p'];
+  const selectors = ['.hero-brand .logo-sub','.hero-eyebrow','.hero h1','.hero-sub','.hero-meta-label','.hero-meta-value','.editorial-label','.priority-item p','.candidates-header h2','.card-name','.card-location','.score-label','.score-value','.card-narrative','.card-section-title','.exp-role','.exp-company','.exp-period','.exp-highlight-list li','.fit-label','.bar-label','.cv-summary','.cv-sub','.cv-role','.cv-company','.cv-bullets li','.comparison-section .cmp-title','.comparison-table th','.comparison-table td','.advisor-section-label','.advisor-name','.advisor-role','.advisor-summary','.footer-cta h2','.footer-cta p','.site-footer'];
   doc.querySelectorAll(selectors.join(',')).forEach(el => {
     if (enabled) { el.setAttribute('contenteditable', 'plaintext-only'); el.setAttribute('data-preview-editable', '1'); }
     else { el.removeAttribute('contenteditable'); el.removeAttribute('data-preview-editable'); }
@@ -1804,6 +1811,9 @@ function buildPresentationHTML() {
   const v = getFormValues();
   const advisor = ADVISORS[v.advisor] || ADVISORS.priscilla || Object.values(ADVISORS)[0];
   const dateFormatted = new Date(v.batchDate + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const candidateCountries = [...new Set(candidates.map(c => String(c.location || '').trim()).filter(Boolean))];
+  const workModel = candidateCountries.length === 1 ? 'Remote · ' + candidateCountries[0] : 'Remote · Global';
+  const salaryRange = fmtSalary(v.salaryRange) || v.salaryRange || 'Confirm with Sagan';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -2077,27 +2087,27 @@ function buildPresentationHTML() {
       <div class="hero-brand">
         <img class="logo-img" src="https://saganrecruitment.com/wp-content/uploads/2025/10/Sagan-Logo-Horizontal-Dark.png" alt="Sagan" />
         <div class="logo-sep"></div>
-        <span class="logo-sub">A curated shortlist</span>
+        <span class="logo-sub">Batch ${escHTML(String(v.batchNumber))} · ${escHTML(dateFormatted)}</span>
       </div>
-      <div class="hero-eyebrow">Sagan Talent Search · ${escHTML(v.clientName)}</div>
+      <div class="hero-eyebrow">Candidate shortlist</div>
       <h1><strong>${escHTML(v.roleTitle)} candidates for ${escHTML(v.clientName)}</strong></h1>
       <p class="hero-sub">${v.introNote && v.introNote.trim() ? escHTML(v.introNote) : `We selected ${candidates.length} candidates who can do the work, explain their decisions, and keep the role moving. The evidence is in each profile.`}</p>
       <div class="hero-meta">
         <div class="hero-meta-item">
-          <span class="hero-meta-label">Candidates</span>
-          <span class="hero-meta-value">${candidates.length} profiles</span>
+          <span class="hero-meta-label">Schedule</span>
+          <span class="hero-meta-value">${escHTML(v.schedule || 'US hours')}</span>
         </div>
         <div class="hero-meta-item">
-          <span class="hero-meta-label">Batch</span>
-          <span class="hero-meta-value">${v.batchNumber} &middot; ${dateFormatted}</span>
+          <span class="hero-meta-label">Monthly range</span>
+          <span class="hero-meta-value">${escHTML(salaryRange)}</span>
         </div>
         <div class="hero-meta-item">
-          <span class="hero-meta-label">Advisor</span>
-          <span class="hero-meta-value">${escHTML(advisor.name)}</span>
+          <span class="hero-meta-label">Work model</span>
+          <span class="hero-meta-value">${escHTML(workModel)}</span>
         </div>
         <div class="hero-meta-item">
-          <span class="hero-meta-label">Ready to interview</span>
-          <span class="hero-meta-value">All ${candidates.length}</span>
+          <span class="hero-meta-label">Profiles</span>
+          <span class="hero-meta-value">${String(candidates.length).padStart(2, '0')}</span>
         </div>
       </div>
     </div>
