@@ -1465,6 +1465,7 @@ function importMatcherHandoff() {
     document.getElementById('workflow').value = payload.workflow === 'white-glove' ? 'white-glove' : 'core';
     applyWorkflowPreset();
     if (payload.member) document.getElementById('clientName').value = payload.member;
+    if (payload.clientUrl) document.getElementById('clientUrl').value = payload.clientUrl;
     if (payload.role) document.getElementById('roleTitle').value = payload.role;
     if (payload.salaryRange) document.getElementById('salaryRange').value = payload.salaryRange;
     if (payload.schedule) document.getElementById('schedule').value = payload.schedule;
@@ -1481,7 +1482,10 @@ function importMatcherHandoff() {
     updateFilterPreview();
     history.replaceState(null, '', location.pathname + location.search);
     switchTab(0);
-    showToast(`Imported ${candidates.length} candidate${candidates.length === 1 ? '' : 's'} from the matcher. Add the member name, review the fields, then preview.`, 'success');
+    showToast(`Imported ${candidates.length} candidate${candidates.length === 1 ? '' : 's'} from the matcher. Review the fields, then preview.`, 'success');
+    if (payload.clientUrl) {
+      setTimeout(() => extractBranding().catch(error => console.warn('[BRAND] Automatic matcher detection failed:', error)), 150);
+    }
   } catch (error) {
     history.replaceState(null, '', location.pathname + location.search);
     showToast('The matcher handoff could not be read. Open the candidates again from the matcher.', 'error');
@@ -4205,7 +4209,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-21.6';
+const BUILDER_BUILD_STAMP = '2026-08-21.7';
 (function staleVersionGuard() {
   async function check() {
     try {
