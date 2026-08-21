@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RT Presentation Builder — Sagan Recruitment</title>
+  <title>Recruiting Builder — Sagan</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
@@ -245,8 +245,8 @@
     <div class="topbar-brand">
       <img src="https://saganrecruitment.com/wp-content/uploads/2025/10/Sagan-Logo-2-e1759568299542.png" alt="Sagan" />
       <span style="opacity:0.3;font-size:18px;">|</span>
-      Recruitment Builder
-      <span class="topbar-badge">v2.0</span>
+      Recruiting Builder
+      <span class="topbar-badge">ONE BUILDER</span>
     </div>
     <div class="topbar-actions">
       <span class="preview-edit-status" id="previewEditStatus">Preview text is locked</span>
@@ -278,6 +278,17 @@
 
       <!-- ── TAB 1: CUSTOMER INFO ── -->
       <div class="step-content active" id="tab-0">
+        <div class="form-section">
+          <div class="form-section-title">Recruiting Workflow</div>
+          <div class="form-group">
+            <label>Team</label>
+            <select id="workflow" onchange="applyWorkflowPreset()">
+              <option value="core">Core / General Recruiting</option>
+              <option value="white-glove">White Glove</option>
+            </select>
+            <div style="font-size:12px;color:var(--text-dim);margin-top:8px;line-height:1.5;">One builder. Same résumé checks, preview, page design, and publishing flow.</div>
+          </div>
+        </div>
         <div class="form-section">
           <div class="form-section-title">Customer Information</div>
           <div class="form-group">
@@ -357,22 +368,39 @@
             </div>
           </div>
           <div class="form-group">
-            <label>Advisor</label>
+            <label>Member Strategist / Talent Advisor</label>
             <select id="advisor">
-              <option value="priscilla">Priscilla Montenegro</option>
-              <option value="manuel">Manuel Jaramillo</option>
-              <option value="andrea">Andrea Mendoza</option>
-              <option value="andres">Andrés Cardozo</option>
-              <option value="jessica">Jessica Lacdao</option>
-              <option value="noel">Noel Balderama</option>
-              <option value="psy">Psy Mallorca</option>
-              <option value="genesis">Genesis Torrealba</option>
-              <option value="vicky">Vicky Martinez</option>
-              <option value="cami">Cami Poloche</option>
-              <option value="caroline">Caroline Muraya</option>
-              <option value="amimo">Amimo Chaka</option>
-              <option value="nadeia">Nadeia Campbell</option>
-              <option value="nicky">Nicky Almonte</option>
+              <optgroup label="Member Strategists and Revenue">
+                <option value="jesus">Jesus Pacheco</option>
+                <option value="kerrilin">Kerri-lin Ward</option>
+                <option value="neil">Neil Samson</option>
+                <option value="leke">Leke Osmani</option>
+                <option value="sean">Sean Tasker</option>
+                <option value="felicitas">Felicitas Luna</option>
+                <option value="reneAafjes">Rene Aafjes</option>
+                <option value="wolf">Wolf Bonilla</option>
+              </optgroup>
+              <optgroup label="White Glove Talent Advisors">
+                <option value="miguel">Miguel Agudelo</option>
+                <option value="guillermo">Guillermo Lindo</option>
+                <option value="katherine">Katherine R</option>
+              </optgroup>
+              <optgroup label="Recruiting Team">
+                <option value="priscilla" selected>Priscilla Montenegro</option>
+                <option value="manuel">Manuel Jaramillo</option>
+                <option value="andrea">Andrea Mendoza</option>
+                <option value="andres">Andrés Cardozo</option>
+                <option value="jessica">Jessica Lacdao</option>
+                <option value="noel">Noel Balderama</option>
+                <option value="psy">Psy Mallorca</option>
+                <option value="genesis">Genesis Torrealba</option>
+                <option value="vicky">Vicky Martinez</option>
+                <option value="cami">Cami Poloche</option>
+                <option value="caroline">Caroline Muraya</option>
+                <option value="amimo">Amimo Chaka</option>
+                <option value="nadeia">Nadeia Campbell</option>
+                <option value="nicky">Nicky Almonte</option>
+              </optgroup>
             </select>
           </div>
         </div>
@@ -423,7 +451,7 @@
         <div class="form-section">
           <div class="form-section-title">Pull from Google Sheet</div>
           <div class="form-group">
-            <label>Google Sheet URL</label>
+            <label>Candidate Sheet URL</label>
             <input type="url" id="sheetUrl" value="https://docs.google.com/spreadsheets/d/1swUUYMpyb5e9zocbONdhqH1ahg53jaQTXM6jyVKXqmc/edit#gid=0" />
           </div>
           <div id="filterPreview" style="font-size:12px;color:var(--text-dim);padding:8px 12px;background:var(--bg);border-radius:8px;margin-bottom:12px;">
@@ -932,6 +960,62 @@ async function callAI(prompt, maxTokens = 200) {
 }
 
 const ADVISORS = {
+  jesus: {
+    name: 'Jesus Pacheco',
+    role: 'Sagan · Head of Revenue',
+    photo: 'https://saganrecruitment.com/wp-content/uploads/2025/10/Jesus-Pacheco.jpeg',
+    summary: 'Jesus leads Revenue at Sagan and personally oversees customer outcomes, retention, and growth. He is your direct point of contact for this search.'
+  },
+  kerrilin: {
+    name: 'Kerri-lin Ward', role: 'Sagan · Member Strategist',
+    photo: 'https://avatars.slack-edge.com/2025-11-10/9898012385953_2a493087ce7fc0e126da_original.png',
+    summary: 'Kerri-lin is your Member Strategist at Sagan. She owns your outcomes and the success of this search, including interview scheduling, feedback, and next steps.'
+  },
+  neil: {
+    name: 'Neil Samson', role: 'Sagan · Member Strategist',
+    photo: 'https://avatars.slack-edge.com/2026-04-01/10823767371749_44179bfe1bdbddf474b9_original.png',
+    summary: 'Neil is your Member Strategist at Sagan. He owns your outcomes and the success of this search, including interview scheduling, feedback, and next steps.'
+  },
+  leke: {
+    name: 'Leke Osmani', role: 'Sagan · Member Strategist',
+    photo: 'https://avatars.slack-edge.com/2026-04-01/10827225415698_a71c46e259f2318a88c2_original.png',
+    summary: 'Leke is your Member Strategist at Sagan. He owns your outcomes and the success of this search, including interview scheduling, feedback, and next steps.'
+  },
+  sean: {
+    name: 'Sean Tasker', role: 'Sagan · Member Strategist',
+    photo: 'https://avatars.slack-edge.com/2026-05-28/11234755853268_edbe5b6ef511862fa6de_original.png',
+    summary: 'Sean is your Member Strategist at Sagan. He owns your outcomes and the success of this search, including interview scheduling, feedback, and next steps.'
+  },
+  felicitas: {
+    name: 'Felicitas Luna', role: 'Sagan · Member Strategist',
+    photo: 'https://avatars.slack-edge.com/2025-05-23/8930769612567_7695495d36e864f5e4ca_original.jpg',
+    summary: 'Felicitas is your Member Strategist at Sagan. She owns your outcomes and the success of this search, including interview scheduling, feedback, and next steps.'
+  },
+  reneAafjes: {
+    name: 'Rene Aafjes', role: 'Sagan · Member Strategist',
+    photo: 'https://saganrecruitment.com/wp-content/uploads/2025/10/Sagan-Logo-2-e1759568299542.png',
+    summary: 'Rene is your Member Strategist at Sagan. He owns your outcomes and the success of this search, including interview scheduling, feedback, and next steps.'
+  },
+  wolf: {
+    name: 'Wolf Bonilla', role: 'Sagan · Member Strategist',
+    photo: 'https://avatars.slack-edge.com/2026-07-08/11548658711889_b7d6f518b56c98aae41e_original.png',
+    summary: 'Wolf is your Member Strategist at Sagan. He owns your outcomes and the success of this search, including interview scheduling, feedback, and next steps.'
+  },
+  miguel: {
+    name: 'Miguel Agudelo Londoño', role: 'Sagan · White Glove Talent Advisor',
+    photo: 'https://saganrecruitment.com/wp-content/uploads/2025/08/Miguel-Agudelo-Londono-.jpeg',
+    summary: 'Miguel connects people and potential. He is your direct point of contact for interview scheduling, feedback, and next steps.'
+  },
+  guillermo: {
+    name: 'Guillermo Lindo', role: 'Sagan · White Glove Talent Advisor',
+    photo: 'https://saganrecruitment.com/wp-content/uploads/2026/01/Guillermo.png',
+    summary: 'Guillermo connects skilled candidates with the right opportunities. He is your direct point of contact for interview scheduling, feedback, and next steps.'
+  },
+  katherine: {
+    name: 'Katherine R', role: 'Sagan · White Glove Talent Advisor',
+    photo: 'https://avatars.slack-edge.com/2026-07-01/11480985047319_74134341a7d527ba9f3a_original.png',
+    summary: 'Katherine focuses on getting the right person into the right seat, fast. She is your direct point of contact for interview scheduling, feedback, and next steps.'
+  },
   priscilla: {
     name: 'Priscilla Montenegro',
     role: 'Sagan · Recruitment Team — Team Lead',
@@ -1332,7 +1416,60 @@ function showBrandStatus(type, msg) {
 // ═══════════════════════════════════════════════════════════════
 // SET DEFAULT DATE
 // ═══════════════════════════════════════════════════════════════
+const SHEET_PRESETS = {
+  core: 'https://docs.google.com/spreadsheets/d/1swUUYMpyb5e9zocbONdhqH1ahg53jaQTXM6jyVKXqmc/edit#gid=0',
+  'white-glove': 'https://docs.google.com/spreadsheets/d/1jfja4wRpk4hyvdGq4HxU-D-7i6FDnUc_dBM4s0Fho0Q/edit#gid=0'
+};
+
+function applyWorkflowPreset() {
+  const workflow = document.getElementById('workflow').value;
+  const sheet = document.getElementById('sheetUrl');
+  const knownPreset = Object.values(SHEET_PRESETS).includes(sheet.value.trim());
+  if (!sheet.value.trim() || knownPreset) sheet.value = SHEET_PRESETS[workflow];
+  const advisor = document.getElementById('advisor');
+  if (workflow === 'white-glove' && ['priscilla', 'manuel'].includes(advisor.value)) advisor.value = 'miguel';
+  if (workflow === 'core' && ['miguel', 'guillermo', 'katherine'].includes(advisor.value)) advisor.value = 'priscilla';
+}
+
+function decodeMatcherHandoff(token) {
+  const base64 = token.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - token.length % 4) % 4);
+  const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+function importMatcherHandoff() {
+  const token = new URLSearchParams(location.hash.slice(1)).get('matcher');
+  if (!token) return;
+  try {
+    const payload = decodeMatcherHandoff(token);
+    document.getElementById('workflow').value = payload.workflow === 'white-glove' ? 'white-glove' : 'core';
+    applyWorkflowPreset();
+    if (payload.member) document.getElementById('clientName').value = payload.member;
+    if (payload.role) document.getElementById('roleTitle').value = payload.role;
+    if (payload.salaryRange) document.getElementById('salaryRange').value = payload.salaryRange;
+    if (payload.schedule) document.getElementById('schedule').value = payload.schedule;
+    if (payload.context) document.getElementById('contextNotes').value = payload.context;
+    const incoming = Array.isArray(payload.candidates) ? payload.candidates : [];
+    candidates = incoming.map(candidate => ({
+      name: candidate.name || '', company: payload.member || '', title: candidate.title || payload.role || '',
+      resumeLink: candidate.resumeLink || '', videoLink: candidate.videoLink || '', portfolioLink: candidate.portfolioLink || '',
+      tap: Boolean(candidate.tap), location: candidate.location || '', experience: candidate.experience || '',
+      salary: candidate.salary || '', skills: candidate.skills || '', summary: candidate.summary || '', recruiterNote: candidate.recruiterNote || ''
+    })).filter(candidate => candidate.name);
+    candidates = dedupeCandidates(candidates).rows;
+    updateCandidateList();
+    updateFilterPreview();
+    history.replaceState(null, '', location.pathname + location.search);
+    switchTab(0);
+    showToast(`Imported ${candidates.length} candidate${candidates.length === 1 ? '' : 's'} from the matcher. Add the member name, review the fields, then preview.`, 'success');
+  } catch (error) {
+    history.replaceState(null, '', location.pathname + location.search);
+    showToast('The matcher handoff could not be read. Open the candidates again from the matcher.', 'error');
+  }
+}
+
 document.getElementById('batchDate').value = new Date().toISOString().split('T')[0];
+importMatcherHandoff();
 
 // ═══════════════════════════════════════════════════════════════
 // LIVE FILTER PREVIEW (updates when Tab 1 fields change)
@@ -3120,7 +3257,7 @@ async function autoDeploy() {
       expectedSha: sha,
       batchNumber: Number(v.batchNumber) || 1,
       overwriteConfirmed,
-      description: `Recruitment presentation — ${v.clientName} · ${v.roleTitle}`,
+      description: `Sagan candidate presentation — ${v.clientName} · ${v.roleTitle}`,
       commitMessage
     }, publisherKey);
 
@@ -3751,6 +3888,7 @@ function getFormValues() {
     fontHeading: 'Fraunces',
     fontBody: 'Inter',
     roleTitle: document.getElementById('roleTitle').value.trim(),
+    workflow: document.getElementById('workflow').value,
     batchNumber: document.getElementById('batchNumber').value,
     batchDate: document.getElementById('batchDate').value,
     advisor: document.getElementById('advisor').value,
@@ -3820,7 +3958,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-21.2';
+const BUILDER_BUILD_STAMP = '2026-08-21.3';
 (function staleVersionGuard() {
   async function check() {
     try {
