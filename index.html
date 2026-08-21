@@ -1961,6 +1961,10 @@ const GORASCAL_TEMPLATE_CSS = `
 .batch-switcher,.batch-switcher[data-count="1"]{display:flex!important}.batch-btn{flex-wrap:wrap}.batch-date{width:100%;font-size:10px;font-weight:500;opacity:.72}
 `;
 
+const PRESENTATION_MEDIA_CSS = `
+.hero-brand{display:flex;align-items:center;gap:16px}.brand-lockup{display:flex;align-items:center;gap:14px;min-width:0}.hero-brand .logo-sep{display:block;width:1px;height:26px;background:var(--line);flex:0 0 auto}.hero-brand .client-logo{width:auto;max-width:150px;height:30px;object-fit:contain}.client-wordmark{display:inline-flex;align-items:center;min-height:30px;max-width:220px;color:var(--glacier);font:700 14px/1.2 var(--font-heading);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.client-wordmark-fallback{display:none}.candidate-video{max-width:620px;margin:30px 0 2px}.candidate-video-label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;color:var(--ink);font:700 15px var(--font-heading)}.candidate-video-label span:last-child{color:var(--muted);font:500 10px var(--font-meta);letter-spacing:.08em;text-transform:uppercase}.candidate-video-frame{position:relative;overflow:hidden;aspect-ratio:16/9;background:var(--glacier);border:1px solid var(--line);border-radius:18px}.candidate-video-frame video,.candidate-video-frame iframe{display:block;width:100%;height:100%;border:0;object-fit:cover;background:var(--glacier)}.candidate-video-fallback{display:flex;align-items:center;justify-content:center;min-height:180px;padding:24px;text-align:center;color:#fff}.candidate-video-fallback a{color:var(--dandelion);font-weight:700}.card-actions:empty{display:none}@media(max-width:560px){.hero-brand{align-items:flex-start;flex-wrap:wrap;padding:14px 0}.hero-brand .logo-sub{width:100%;margin-left:0}.brand-lockup{max-width:100%}.hero-brand .client-logo{max-width:110px;height:26px}.client-wordmark{max-width:150px;font-size:12px}.candidate-video{margin-top:24px}.candidate-video-frame{border-radius:14px}}
+`;
+
 function buildPresentationHTML() {
   const v = getFormValues();
   const advisor = ADVISORS[v.advisor] || ADVISORS.priscilla || Object.values(ADVISORS)[0];
@@ -2232,7 +2236,7 @@ function buildPresentationHTML() {
       .footer-cta h2 { font-size: 24px; }
     }
   </style>
-  <style>${CANONICAL_PRESENTATION_CSS}</style><style>${GORASCAL_TEMPLATE_CSS}</style>
+  <style>${CANONICAL_PRESENTATION_CSS}</style><style>${GORASCAL_TEMPLATE_CSS}</style><style>${PRESENTATION_MEDIA_CSS}</style>
 </head>
 <body>
 
@@ -2240,8 +2244,11 @@ function buildPresentationHTML() {
   <section class="hero">
     <div class="hero-inner">
       <div class="hero-brand">
-        <img class="logo-img" src="https://saganrecruitment.com/wp-content/uploads/2025/10/Sagan-Logo-Horizontal-Dark.png" alt="Sagan" />
-        <div class="logo-sep"></div>
+        <div class="brand-lockup">
+          <img class="logo-img" src="https://saganrecruitment.com/wp-content/uploads/2025/10/Sagan-Logo-2-e1759568299542.png" alt="Sagan" />
+          <div class="logo-sep" aria-hidden="true"></div>
+          ${v.logoUrl ? `<img class="client-logo" src="${escHTML(v.logoUrl)}" alt="${escHTML(v.clientName)}" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'" /><span class="client-wordmark client-wordmark-fallback">${escHTML(v.clientName)}</span>` : `<span class="client-wordmark">${escHTML(v.clientName)}</span>`}
+        </div>
         <span class="logo-sub">Batch ${escHTML(String(v.batchNumber))} · ${escHTML(dateFormatted)}</span>
       </div>
       <div class="hero-eyebrow">Candidate shortlist</div>
@@ -2424,6 +2431,43 @@ function buildEmbeddedResume(c) {
   </div></details>`;
 }
 
+function candidateVideoSpec(url) {
+  const source = String(url || '').trim();
+  if (!/^https?:\/\//i.test(source)) return null;
+  let match;
+  if (/candidate-video\.com\/uploads\//i.test(source) || /\.(?:mp4|webm|ogg|mov)(?:[?#]|$)/i.test(source)) return { type: 'video', src: source };
+  match = source.match(/drive\.google\.com\/file\/d\/([^/?#]+)/i) || source.match(/[?&]id=([\w-]+)/i);
+  if (match) return { type: 'iframe', src: `https://drive.google.com/file/d/${match[1]}/preview` };
+  match = source.match(/(?:loom\.com\/(?:share|embed)\/)([a-z0-9-]+)/i);
+  if (match) return { type: 'iframe', src: `https://www.loom.com/embed/${match[1]}` };
+  match = source.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{6,})/i);
+  if (match) return { type: 'iframe', src: `https://www.youtube-nocookie.com/embed/${match[1]}` };
+  match = source.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+  if (match) return { type: 'iframe', src: `https://player.vimeo.com/video/${match[1]}` };
+  match = source.match(/voca\.ro\/(?:embed\/)?([a-z0-9]+)/i);
+  if (match) return { type: 'iframe', src: `https://vocaroo.com/embed/${match[1]}?autoplay=0` };
+  return { type: 'fallback', src: source };
+}
+
+function buildInlineCandidateVideo(url, candidateName) {
+  const spec = candidateVideoSpec(url);
+  if (!spec) return { markup: '', fallback: '' };
+  const firstName = String(candidateName || 'Candidate').trim().split(/\s+/)[0] || 'Candidate';
+  const heading = `<div class="candidate-video-label"><span>Meet ${escHTML(firstName)}</span><span>Candidate introduction</span></div>`;
+  if (spec.type === 'video') return {
+    markup: `<section class="candidate-video">${heading}<div class="candidate-video-frame"><video controls playsinline preload="metadata" controlslist="nodownload" src="${escHTML(spec.src)}">Your browser cannot play this video.</video></div></section>`,
+    fallback: ''
+  };
+  if (spec.type === 'iframe') return {
+    markup: `<section class="candidate-video">${heading}<div class="candidate-video-frame"><iframe src="${escHTML(spec.src)}" title="${escHTML(firstName)} candidate introduction" loading="lazy" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div></section>`,
+    fallback: ''
+  };
+  return {
+    markup: '',
+    fallback: `<a class="video-intro-btn" href="${escHTML(spec.src)}" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Watch Intro Video</a>`
+  };
+}
+
 function generateCandidateCard(c, idx, v) {
   const skills = c.skills ? c.skills.split(',').map(s => s.trim()).filter(Boolean) : [];
   const firstName = c.name.split(' ')[0];
@@ -2449,6 +2493,7 @@ function generateCandidateCard(c, idx, v) {
   // Strength bars: prefer AI-generated contextual scores, fallback to position-based
   const barSkills = c.strengthScores ? Object.keys(c.strengthScores).slice(0, 6) : skills.slice(0, 6);
   const barScores = c.strengthScores ? Object.values(c.strengthScores).slice(0, 6) : [95, 90, 88, 85, 82, 78];
+  const candidateVideo = buildInlineCandidateVideo(c.videoLink, c.name);
 
   return `
     <div class="candidate-card">
@@ -2516,8 +2561,9 @@ function generateCandidateCard(c, idx, v) {
             </div>`).join('')}
           </div>` : ''}
 
+          ${candidateVideo.markup}
           <div class="card-actions">
-            ${/^https?:\/\//i.test(c.videoLink || '') ? `<a class="video-intro-btn" href="${escHTML(c.videoLink)}" target="_blank"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Watch Intro Video</a>` : ''}
+            ${candidateVideo.fallback}
             ${/^https?:\/\//i.test(c.portfolioLink || '') ? `<a class="video-intro-btn" href="${escHTML(c.portfolioLink)}" target="_blank"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>View Portfolio</a>` : ''}
             ${c.tap ? `<a class="video-intro-btn btn-tap" href="https://drive.google.com/file/d/1lvb0EWiOoIzbKKFGXN0IiuDjdGYOZdHC/view" target="_blank" rel="noopener">What is GTC?</a>` : ''}
           </div>
@@ -4081,8 +4127,8 @@ function getFormValues() {
     clientName: document.getElementById('clientName').value.trim(),
     clientContact: document.getElementById('clientContact').value.trim(),
     clientUrl: document.getElementById('clientUrl').value.trim(),
-    // Branding forced to Sagan Passport (client-branding detection disabled)
-    logoUrl: 'https://saganrecruitment.com/wp-content/uploads/2025/10/Sagan-Logo-2-e1759568299542.png',
+    // Sagan stays primary. The optional customer logo creates the shared lockup.
+    logoUrl: document.getElementById('logoUrl').value.trim(),
     colorPrimary: '#a67714',
     colorDark: '#093a3e',
     colorHighlight: '#e8b32f',
@@ -4159,7 +4205,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-21.5';
+const BUILDER_BUILD_STAMP = '2026-08-21.6';
 (function staleVersionGuard() {
   async function check() {
     try {
