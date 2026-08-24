@@ -454,21 +454,6 @@
           </div>
         </div>
 
-        <div class="form-section">
-          <div class="form-section-title">Candidate Outreach Brief</div>
-          <div style="font-size:12px;color:var(--text-dim);line-height:1.5;margin-bottom:12px;">Anonymous role summary for the Bulk Email Sender. Review it before you copy.</div>
-          <div class="form-group">
-            <textarea id="outreachBrief" rows="8" maxlength="1200" placeholder="Generate a private, candidate-facing role brief..." oninput="updateOutreachWordCount()"></textarea>
-            <div style="display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:11px;color:var(--text-dim);">
-              <span id="outreachBriefStatus">Company and contact details are removed.</span>
-              <span><strong id="outreachWordCount">0</strong>/120 words</span>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-accent" id="generateOutreachBtn" onclick="generateOutreachBrief()" style="flex:1;justify-content:center;">Generate brief</button>
-            <button class="btn btn-ghost" id="copyOutreachBtn" onclick="copyOutreachBrief()" style="flex:1;justify-content:center;">Copy for Bulk Sender</button>
-          </div>
-        </div>
       </div>
 
       <!-- ── TAB 3: CANDIDATES ── -->
@@ -527,7 +512,7 @@
 // (when Anthropic retires a model, change this one line)
 // ═══════════════════════════════════════════════════════════════
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
-const JESUS_VISIBLE_TEXT_VOICE = `Write every visible, generated sentence in Jesus Pacheco's voice. This applies to outreach copy, candidate summaries, selection reasons, introductions, fit points, comparison labels, and page copy.
+const JESUS_VISIBLE_TEXT_VOICE = `Write every visible, generated sentence in Jesus Pacheco's voice. This applies to candidate summaries, selection reasons, introductions, fit points, comparison labels, and page copy.
 - Straightforward first. Elegant second. It must sound like one smart person speaking to another, not a recruiter template or AI copy.
 - Use short sentences, simple words, active voice, and contractions when they fit.
 - Lead with specific evidence. Then explain why it matters for this role.
@@ -3258,138 +3243,6 @@ function showToast(msg, type) {
   t.style.borderColor = colors[type] || 'var(--border)';
   t.innerHTML = `<div style="color:${colors[type]};font-size:13px;font-weight:600;margin-bottom:4px;">${type === 'loading' ? '⏳' : type === 'success' ? '✅' : '❌'} ${type.toUpperCase()}</div><div style="font-size:13px;color:var(--text);">${msg}</div>`;
   if (type !== 'loading') setTimeout(() => { t.style.display = 'none'; }, type === 'success' ? 15000 : 8000);
-}
-
-function outreachWordCount(text) {
-  return String(text || '').trim().split(/\s+/).filter(Boolean).length;
-}
-
-function updateOutreachWordCount() {
-  const field = document.getElementById('outreachBrief');
-  const counter = document.getElementById('outreachWordCount');
-  const count = outreachWordCount(field?.value);
-  if (counter) {
-    counter.textContent = String(count);
-    counter.style.color = count > 120 ? 'var(--red)' : count >= 80 ? 'var(--green)' : 'inherit';
-  }
-}
-
-function outreachEscapeRegExp(value) {
-  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function capOutreachWords(text, maximum = 120) {
-  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
-  if (words.length <= maximum) return words.join(' ');
-  let shortened = words.slice(0, maximum).join(' ');
-  const sentenceEnd = Math.max(shortened.lastIndexOf('.'), shortened.lastIndexOf('!'), shortened.lastIndexOf('?'));
-  if (sentenceEnd > shortened.length * 0.72) shortened = shortened.slice(0, sentenceEnd + 1);
-  else shortened = shortened.replace(/[,:;.!?]*$/, '') + '.';
-  return shortened;
-}
-
-function sanitizeOutreachBrief(text, maximum = 120) {
-  let safe = String(text || '')
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/https?:\/\/\S+|www\.\S+/gi, ' ')
-    .replace(/\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/g, ' ')
-    .replace(/(?:\+?\d{1,3}[\s().-]*)?(?:\d[\s().-]*){7,14}\d/g, ' ');
-  const privateValues = [
-    document.getElementById('clientName')?.value,
-    document.getElementById('clientContact')?.value,
-    ...candidates.map(candidate => candidate.name)
-  ].map(value => String(value || '').trim()).filter(value => value.length > 2);
-  privateValues.forEach(value => {
-    safe = safe.replace(new RegExp(outreachEscapeRegExp(value), 'gi'), 'the company');
-  });
-  safe = safe
-    .replace(/^\s*(?:subject|email|message|outreach brief)\s*:\s*/i, '')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\s+([,.;:!?])/g, '$1')
-    .replace(/(?:the company\s*){2,}/gi, 'the company ')
-    .replace(/\n{2,}/g, '\n')
-    .trim();
-  return maximum ? capOutreachWords(safe, maximum) : safe;
-}
-
-function fallbackOutreachBrief(role, industry, context, salary, schedule) {
-  const safeContext = capOutreachWords(context, 28).replace(/[.!?]*$/, '');
-  const terms = [salary && `The monthly range is ${salary}.`, schedule && `The schedule is ${schedule}.`].filter(Boolean).join(' ');
-  return `We’re looking for a ${role} for a ${industry || 'US-based'} business. ${safeContext ? `The work centers on ${safeContext}.` : 'You’ll own the day-to-day priorities and keep the work moving.'} We need someone who has done similar work before, can explain what they owned, and follows through without being chased. ${terms} If you’ve done this kind of work, reply with your availability and a short note about what you handled. I’d like to talk.`;
-}
-
-async function generateOutreachBrief() {
-  const rawRole = document.getElementById('roleTitle').value.trim();
-  if (!rawRole) { showToast('Add the role title before generating the outreach brief.', 'error'); switchTab(0); return; }
-  const role = sanitizeOutreachBrief(rawRole);
-  const industry = sanitizeOutreachBrief(document.getElementById('industry').value.trim());
-  const context = sanitizeOutreachBrief([
-    document.getElementById('contextNotes').value.trim(),
-    document.getElementById('notebookContext').value.trim()
-  ].filter(Boolean).join(' '), 360).slice(0, 2200);
-  const salary = sanitizeOutreachBrief(fmtSalary(document.getElementById('salaryRange').value.trim()) || document.getElementById('salaryRange').value.trim());
-  const schedule = sanitizeOutreachBrief(document.getElementById('schedule').value.trim());
-  const button = document.getElementById('generateOutreachBtn');
-  const status = document.getElementById('outreachBriefStatus');
-  button.disabled = true;
-  button.textContent = 'Generating...';
-  status.textContent = 'Writing an anonymous candidate-facing brief...';
-  const prompt = `Write one candidate-facing outreach paragraph for this open role.
-
-${JESUS_VISIBLE_TEXT_VOICE}
-
-ROLE: ${role}
-INDUSTRY: ${industry || 'not provided'}
-RESPONSIBILITIES AND REQUIREMENTS: ${context || 'not provided'}
-COMPENSATION: ${salary || 'not provided'}
-SCHEDULE: ${schedule || 'not provided'}
-
-Outreach rules:
-- Write 75 to 105 words. Never exceed 120 words.
-- Do not include or invent a company name, contact name, person name, email, phone number, website, or identifying detail.
-- You may mention only the generic industry.
-- Lead with "We’re looking for..." Then explain the real work in concrete language.
-- Explain the role, its main responsibilities, the strongest proof required, schedule, and compensation when provided.
-- Include one honest standard. Do not force a joke or slogan.
-- End naturally. Never write "if this matches your background."
-- No headings, bullets, emojis, or identifying details.
-- Return only the paragraph.`;
-  let brief = '';
-  try {
-    brief = await callAI_premium(prompt, 350);
-  } catch (error) {
-    brief = fallbackOutreachBrief(role, industry, context, salary, schedule);
-  }
-  brief = sanitizeOutreachBrief(brief);
-  if (visibleCopyMissesJesusVoice(brief) || /\bif this matches your background\b/i.test(brief)) {
-    try {
-      brief = sanitizeOutreachBrief(await callAI_premium(`${prompt}\n\nVOICE CHECK FAILED. Rewrite the draft from scratch. Cut every generic phrase and every em dash. Keep the facts. Make it sound like one smart person speaking to another.\n\nFIRST DRAFT:\n${brief}`, 350));
-    } catch (error) {
-      brief = sanitizeOutreachBrief(fallbackOutreachBrief(role, industry, context, salary, schedule));
-    }
-  }
-  if (visibleCopyMissesJesusVoice(brief) || /\bif this matches your background\b/i.test(brief)) brief = sanitizeOutreachBrief(fallbackOutreachBrief(role, industry, context, salary, schedule));
-  if (outreachWordCount(brief) < 55) brief = sanitizeOutreachBrief(fallbackOutreachBrief(role, industry, context, salary, schedule));
-  document.getElementById('outreachBrief').value = brief;
-  updateOutreachWordCount();
-  status.textContent = 'Anonymous and ready for your review.';
-  button.disabled = false;
-  button.textContent = 'Regenerate brief';
-  showToast('Outreach brief ready. Review it, then copy it to the Bulk Email Sender.', 'success');
-}
-
-async function copyOutreachBrief() {
-  const field = document.getElementById('outreachBrief');
-  const brief = sanitizeOutreachBrief(field.value);
-  if (!brief) { showToast('Generate or write the outreach brief first.', 'error'); return; }
-  field.value = brief;
-  updateOutreachWordCount();
-  let copied = false;
-  try { await navigator.clipboard.writeText(brief); copied = true; } catch (error) {
-    field.focus(); field.select(); copied = document.execCommand('copy');
-  }
-  document.getElementById('outreachBriefStatus').textContent = copied ? 'Copied as plain text. No company or contact details.' : 'Select the text and copy it manually.';
-  showToast(copied ? 'Copied for the Bulk Email Sender.' : 'Automatic copy failed. Select the brief and copy it manually.', copied ? 'success' : 'error');
 }
 
 function nextBatchNumberFromHTML(html) {
