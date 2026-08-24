@@ -527,6 +527,30 @@
 // (when Anthropic retires a model, change this one line)
 // ═══════════════════════════════════════════════════════════════
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
+const JESUS_VISIBLE_TEXT_VOICE = `Write every visible, generated sentence in Jesus Pacheco's voice. This applies to outreach copy, candidate summaries, selection reasons, introductions, fit points, comparison labels, and page copy.
+- Straightforward first. Elegant second. It must sound like one smart person speaking to another, not a recruiter template or AI copy.
+- Use short sentences, simple words, active voice, and contractions when they fit.
+- Lead with specific evidence. Then explain why it matters for this role.
+- Facts do the selling: years, tools, scope, ownership, outcomes, industries, and real constraints.
+- Be confident. Do not hide uncertainty or invent proof.
+- Do not stack adjectives. Do not repeat the same point in different words.
+- Never use: ideal candidate, strong candidate, detail-oriented, quality-control mindset, essential, exciting opportunity, dynamic team, fast-paced environment, team player, excellent communication skills, passionate about, extensive experience, well-versed, seasoned professional, proven track record, leveraging, synergy, best-in-class, adept at, comprehensive background, brings a wealth of, well-positioned, seamlessly, robust, stands out, or exactly what this role demands.
+- No hype, corporate filler, fake enthusiasm, stock metaphors, forced slang, or em dashes.`;
+const JESUS_COPY_FAILURE_PATTERNS = [
+  /\b(?:ideal|strong|successful) candidates?\b/i, /\bdetail[- ]oriented\b/i,
+  /\bquality[- ]control mindset\b/i, /\b(?:is|are) essential\b/i,
+  /\bexciting opportunity\b/i, /\bdynamic (?:team|environment)\b/i,
+  /\bfast[- ]paced environment\b/i, /\bteam player\b/i,
+  /\bexcellent communication skills\b/i, /\bpassionate about\b/i,
+  /\bextensive experience\b/i, /\bwell[- ]versed\b/i, /\bseasoned professional\b/i,
+  /\bproven track record\b/i, /\b(?:leveraging|synergy|best[- ]in[- ]class|adept at)\b/i,
+  /\bcomprehensive background\b/i, /\bbrings? a wealth of\b/i,
+  /\bwell[- ]positioned\b/i, /\bseamlessly\b/i, /\brobust\b/i,
+  /\bstands? out\b/i, /\bexactly what this role demands\b/i, /—/
+];
+function visibleCopyMissesJesusVoice(value) {
+  return JESUS_COPY_FAILURE_PATTERNS.some(pattern => pattern.test(String(value || '')));
+}
 
 // ═══════════════════════════════════════════════════════════════
 // STATE
@@ -3018,7 +3042,7 @@ async function generateResumeData() {
         const rawText = [c.summary, c.skills, c.experience, c.recruiterNote].filter(Boolean).join('\n');
         if (rawText.length > 30) {
           try {
-            const fallbackPrompt = 'Structure the following candidate notes into resume format. ONLY use facts explicitly stated below. Do NOT invent or guess anything not present.\n\nCANDIDATE: ' + c.name + '\nDATA:\n' + rawText.slice(0, 3000) + '\n\nReturn ONLY valid JSON:\n{"summary":"Brief professional summary from the data","skillCategories":[{"category":"Category","skills":"Skill1, Skill2"}],"experience":[{"role":"Job Title","company":"Company Name","dates":"Dates","description":"Key responsibilities"}],"education":[{"degree":"Degree","school":"School","year":"Year"}],"certifications":[],"languages":[{"name":"Language","level":"Level"}]}\n\nIf a field has no data, use empty array []. NEVER invent companies or job titles not in the text.';
+            const fallbackPrompt = JESUS_VISIBLE_TEXT_VOICE + '\n\nStructure the following candidate notes into resume format. ONLY use facts explicitly stated below. Do NOT invent or guess anything not present.\n\nCANDIDATE: ' + c.name + '\nDATA:\n' + rawText.slice(0, 3000) + '\n\nReturn ONLY valid JSON:\n{"summary":"Two short factual sentences in Jesus voice. Lead with proof, not adjectives","skillCategories":[{"category":"Category","skills":"Skill1, Skill2"}],"experience":[{"role":"Job Title","company":"Company Name","dates":"Dates","description":"Key responsibilities"}],"education":[{"degree":"Degree","school":"School","year":"Year"}],"certifications":[],"languages":[{"name":"Language","level":"Level"}]}\n\nIf a field has no data, use empty array []. NEVER invent companies or job titles not in the text.';
             aiText = await callAI_premium(fallbackPrompt, 1500);
           } catch(e) {
             console.log('[RESUME] Spreadsheet AI structuring failed:', e.message);
@@ -3043,6 +3067,9 @@ async function generateResumeData() {
 
       // Parse the JSON response
       c.resumeData = normalizeResumeData(parseResumeAIJSON(aiText));
+      if (!resumeFetched && visibleCopyMissesJesusVoice(c.resumeData.summary)) {
+        c.resumeData.summary = [c.recruiterNote, c.summary].find(value => value && !visibleCopyMissesJesusVoice(value)) || '';
+      }
       if (!resumeFetched) {
         c.resumeData.fullExtract = false;
         c.resumeData._sourceWarning = sourceWarning || 'Resume link not accessible. Data from spreadsheet only.';
@@ -3288,7 +3315,7 @@ function sanitizeOutreachBrief(text, maximum = 120) {
 function fallbackOutreachBrief(role, industry, context, salary, schedule) {
   const safeContext = capOutreachWords(context, 28).replace(/[.!?]*$/, '');
   const terms = [salary && `The monthly range is ${salary}.`, schedule && `The schedule is ${schedule}.`].filter(Boolean).join(' ');
-  return `We’re hiring a ${role} for a growing ${industry || 'US-based'} business. ${safeContext ? `The role will focus on ${safeContext}.` : 'The role will own key day-to-day priorities and help the team execute consistently.'} You’ll manage the core responsibilities, keep work organized, and communicate clearly with a remote US team. The strongest fit will bring relevant hands-on experience, reliable follow-through, and the judgment to solve problems without constant direction. ${terms} If this matches your background, reply with your availability and a short note about the experience that makes you a strong fit.`;
+  return `We’re looking for a ${role} for a ${industry || 'US-based'} business. ${safeContext ? `The work centers on ${safeContext}.` : 'You’ll own the day-to-day priorities and keep the work moving.'} We need someone who has done similar work before, can explain what they owned, and follows through without being chased. ${terms} If you’ve done this kind of work, reply with your availability and a short note about what you handled. I’d like to talk.`;
 }
 
 async function generateOutreachBrief() {
@@ -3309,19 +3336,23 @@ async function generateOutreachBrief() {
   status.textContent = 'Writing an anonymous candidate-facing brief...';
   const prompt = `Write one candidate-facing outreach paragraph for this open role.
 
+${JESUS_VISIBLE_TEXT_VOICE}
+
 ROLE: ${role}
 INDUSTRY: ${industry || 'not provided'}
 RESPONSIBILITIES AND REQUIREMENTS: ${context || 'not provided'}
 COMPENSATION: ${salary || 'not provided'}
 SCHEDULE: ${schedule || 'not provided'}
 
-Rules:
-- Write 90 to 115 words. Never exceed 120 words.
+Outreach rules:
+- Write 75 to 105 words. Never exceed 120 words.
 - Do not include or invent a company name, contact name, person name, email, phone number, website, or identifying detail.
 - You may mention only the generic industry.
-- Explain the role, its main responsibilities, the strongest requirements, schedule, and compensation when provided.
-- Use plain, natural English. Short sentences. No hype, buzzwords, emojis, headings, bullets, or fake enthusiasm.
-- End with a simple invitation to reply if the role fits their background.
+- Lead with "We’re looking for..." Then explain the real work in concrete language.
+- Explain the role, its main responsibilities, the strongest proof required, schedule, and compensation when provided.
+- Include one honest standard. Do not force a joke or slogan.
+- End naturally. Never write "if this matches your background."
+- No headings, bullets, emojis, or identifying details.
 - Return only the paragraph.`;
   let brief = '';
   try {
@@ -3330,6 +3361,14 @@ Rules:
     brief = fallbackOutreachBrief(role, industry, context, salary, schedule);
   }
   brief = sanitizeOutreachBrief(brief);
+  if (visibleCopyMissesJesusVoice(brief) || /\bif this matches your background\b/i.test(brief)) {
+    try {
+      brief = sanitizeOutreachBrief(await callAI_premium(`${prompt}\n\nVOICE CHECK FAILED. Rewrite the draft from scratch. Cut every generic phrase and every em dash. Keep the facts. Make it sound like one smart person speaking to another.\n\nFIRST DRAFT:\n${brief}`, 350));
+    } catch (error) {
+      brief = sanitizeOutreachBrief(fallbackOutreachBrief(role, industry, context, salary, schedule));
+    }
+  }
+  if (visibleCopyMissesJesusVoice(brief) || /\bif this matches your background\b/i.test(brief)) brief = sanitizeOutreachBrief(fallbackOutreachBrief(role, industry, context, salary, schedule));
   if (outreachWordCount(brief) < 55) brief = sanitizeOutreachBrief(fallbackOutreachBrief(role, industry, context, salary, schedule));
   document.getElementById('outreachBrief').value = brief;
   updateOutreachWordCount();
@@ -3596,7 +3635,9 @@ async function generateAINotes() {
     try {
       const notebookContext = document.getElementById('notebookContext')?.value?.trim() || '';
 
-      const prompt = `You are a Talent Advisor at Sagan Recruitment. Your job: make the client FEEL why this person fits, not just list qualifications. Write like Jesus Pacheco selling the candidate in a real conversation after one clean edit. Straightforward first. Elegant second. Never stiff or over-polished.
+      const prompt = `${JESUS_VISIBLE_TEXT_VOICE}
+
+You are a Talent Advisor at Sagan Recruitment. Your job: make the customer feel why this person fits, not just list qualifications. Write like Jesus Pacheco selling the candidate in a real conversation after one clean edit.
 
 WHO YOU ARE: MIT Supply Chain master's. Telecom engineer from Venezuela. Based in Mendoza, Argentina. You think in systems, sell with stories, and write like you talk. You are NOT an AI. You are a real person who has vetted this candidate personally.
 
@@ -3705,6 +3746,11 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
             if (why || note) {
               parsed = { why, note, experience: exp, skills: sk };
             } else { throw pe; }
+          }
+          const visibleDraft = [parsed?.why, parsed?.note, ...(Array.isArray(parsed?.fitIndicators) ? parsed.fitIndicators : [])].filter(Boolean).join(' ');
+          if (visibleCopyMissesJesusVoice(visibleDraft)) {
+            parsed = null;
+            throw new Error('Generated copy missed Jesus’s voice standard');
           }
         } catch(retryErr) {
           console.error('Attempt ' + (attempt+1) + ' failed for ' + c.name + ':', retryErr.message);
@@ -3816,6 +3862,9 @@ function runPublishAudit(html) {
 
   const recruiterNotes = doc.querySelectorAll('.card-recruiter-note, .recruiter-note-title');
   if (recruiterNotes.length || /\bRecruiter Note\b/i.test(body)) issues.push('Recruiter notes are visible. Keep only one client-ready introduction on each candidate card.');
+  const voiceFailures = Array.from(doc.querySelectorAll('.card-narrative, .fit-label, .best-tag'))
+    .filter(element => visibleCopyMissesJesusVoice(element.textContent || ''));
+  if (voiceFailures.length) issues.push(`${voiceFailures.length} generated text field(s) missed Jesus’s voice standard`);
   const introProblems = Array.from(doc.querySelectorAll('.candidate-card')).filter(card => card.querySelectorAll('.card-narrative').length !== 1);
   if (introProblems.length) issues.push(`${introProblems.length} card(s) do not have exactly one candidate introduction`);
   const outboundCandidateVideos = Array.from(doc.querySelectorAll('.video-intro-btn')).filter(button => !button.classList.contains('gtc-info-btn') && /intro\s*video/i.test(button.textContent || ''));
