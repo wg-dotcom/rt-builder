@@ -654,6 +654,19 @@ function uniqueTextLines(value, limit = Infinity) {
   }).slice(0, limit);
 }
 
+function generatedWordCount(value) {
+  return String(value || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+function capGeneratedWords(value, maximum = 70) {
+  const words = String(value || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maximum) return words.join(' ');
+  let shortened = words.slice(0, maximum).join(' ');
+  const sentenceEnd = Math.max(shortened.lastIndexOf('.'), shortened.lastIndexOf('!'), shortened.lastIndexOf('?'));
+  if (sentenceEnd > shortened.length * 0.62) return shortened.slice(0, sentenceEnd + 1);
+  return shortened.replace(/[,:;.!?]*$/, '') + '.';
+}
+
 // ---- date normalization + computed experience years ----
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function normalizeDateText(value) {
@@ -1486,7 +1499,7 @@ function importMatcherHandoff() {
       name: candidate.name || '', company: payload.member || '', title: candidate.title || payload.role || '',
       resumeLink: candidate.resumeLink || '', videoLink: candidate.videoLink || '', portfolioLink: candidate.portfolioLink || '',
       tap: Boolean(candidate.tap), location: candidate.location || '', experience: candidate.experience || '',
-      salary: candidate.salary || '', skills: candidate.skills || '', summary: candidate.summary || '', recruiterNote: candidate.recruiterNote || ''
+      salary: candidate.salary || '', skills: candidate.skills || '', summary: candidate.summary || '', recruiterNote: capGeneratedWords(candidate.recruiterNote || '', 70)
     })).filter(candidate => candidate.name);
     candidates = dedupeCandidates(candidates).rows;
     updateCandidateList();
@@ -1980,6 +1993,10 @@ const PRESENTATION_MEDIA_CSS = `
 .hero-brand{display:flex;align-items:center;gap:16px}.brand-lockup{display:flex;align-items:center;gap:14px;min-width:0}.hero-brand .logo-sep{display:block;width:1px;height:26px;background:var(--line);flex:0 0 auto}.hero-brand .client-logo{width:auto;max-width:150px;height:30px;object-fit:contain}.client-wordmark{display:inline-flex;align-items:center;min-height:30px;max-width:220px;color:var(--glacier);font:700 14px/1.2 var(--font-heading);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.client-wordmark-fallback{display:none}.candidate-video{max-width:620px;margin:30px 0 2px}.candidate-video-label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;color:var(--ink);font:700 15px var(--font-heading)}.candidate-video-label span:last-child{color:var(--muted);font:500 10px var(--font-meta);letter-spacing:.08em;text-transform:uppercase}.candidate-video-frame{position:relative;overflow:hidden;aspect-ratio:16/9;background:var(--glacier);border:1px solid var(--line);border-radius:18px}.candidate-video-frame video,.candidate-video-frame iframe{display:block;width:100%;height:100%;border:0;object-fit:cover;background:var(--glacier)}.candidate-audio-frame{display:flex;align-items:center;min-height:84px;padding:18px;background:var(--cream);border:1px solid var(--line);border-radius:18px}.candidate-audio-frame audio{width:100%}.candidate-audio-embed{min-height:116px;padding:0;overflow:hidden}.candidate-audio-embed iframe{display:block;width:100%;height:116px;border:0}.card-actions:empty{display:none}@media(max-width:560px){.hero-brand{align-items:flex-start;flex-wrap:wrap;padding:14px 0}.hero-brand .logo-sub{width:100%;margin-left:0}.brand-lockup{max-width:100%}.hero-brand .client-logo{max-width:110px;height:26px}.client-wordmark{max-width:150px;font-size:12px}.candidate-video{margin-top:24px}.candidate-video-frame,.candidate-audio-frame{border-radius:14px}}
 `;
 
+const PRESENTATION_RESUME_CSS = String.raw`
+.resume-details{overflow:hidden}.resume-details[open]{background:var(--paper,#fff)}.resume-details summary{cursor:pointer;list-style:none}.resume-details summary::-webkit-details-marker{display:none}.resume-details summary::after{content:'+';margin-left:10px;font:600 14px var(--font-meta)}.resume-details[open] summary::after{content:'\2212'}.resume-details .cv-body{display:grid;gap:0;padding:28px}.cv-summary{margin:0 0 28px;padding:18px 20px;background:var(--cream,#f5f2ed);border-left:3px solid var(--dandelion,#f5b800);border-radius:0 12px 12px 0;color:var(--ink,#122e30);font-size:14px;line-height:1.65}.cv-sub{display:flex;align-items:center;gap:12px;margin:30px 0 16px;color:var(--glacier,#093a3e);font:700 13px var(--font-heading);letter-spacing:.02em}.cv-sub::after{content:'';height:1px;flex:1;background:var(--line,#d8d4cc)}.cv-sub:first-of-type{margin-top:0}.cv-exp{padding:0 0 22px;margin:0 0 22px;border-bottom:1px solid var(--line,#d8d4cc)}.cv-exp:last-of-type{margin-bottom:0}.cv-exp-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}.cv-role{color:var(--ink,#122e30);font:700 15px/1.4 var(--font-heading)}.cv-dates{flex:0 0 auto;padding:4px 8px;border:1px solid var(--line,#d8d4cc);border-radius:999px;color:var(--muted,#657170);font:11px/1.2 var(--font-meta);white-space:nowrap}.cv-company{margin:4px 0 0;color:var(--muted,#657170);font-size:12px}.cv-bullets{display:grid;gap:8px;margin:14px 0 0;padding:0;list-style:none}.cv-bullets li{position:relative;padding-left:16px;color:var(--ink,#122e30);font-size:13px;line-height:1.55}.cv-bullets li::before{content:'';position:absolute;left:0;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--dandelion,#f5b800)}.cv-edu{padding:14px 16px;margin-bottom:9px;background:var(--cream,#f5f2ed);border:1px solid var(--line,#d8d4cc);border-radius:12px;color:var(--ink,#122e30);font-size:13px;line-height:1.5}.cv-tags{display:flex;flex-wrap:wrap;gap:8px}.cv-line{padding:14px 16px;background:var(--cream,#f5f2ed);border-radius:12px;color:var(--ink,#122e30);font-size:13px;line-height:1.55}@media(max-width:560px){.resume-details .cv-body{margin:0 10px 10px;padding:18px}.cv-exp-head{display:grid;gap:6px}.cv-dates{width:max-content}.cv-summary{padding:15px 16px}}
+`;
+
 function buildPresentationHTML() {
   const v = getFormValues();
   const advisor = ADVISORS[v.advisor] || ADVISORS.priscilla || Object.values(ADVISORS)[0];
@@ -2251,7 +2268,7 @@ function buildPresentationHTML() {
       .footer-cta h2 { font-size: 24px; }
     }
   </style>
-  <style>${CANONICAL_PRESENTATION_CSS}</style><style>${GORASCAL_TEMPLATE_CSS}</style><style>${PRESENTATION_MEDIA_CSS}</style>
+  <style>${CANONICAL_PRESENTATION_CSS}</style><style>${GORASCAL_TEMPLATE_CSS}</style><style>${PRESENTATION_MEDIA_CSS}</style><style>${PRESENTATION_RESUME_CSS}</style>
 </head>
 <body>
 
@@ -2518,7 +2535,7 @@ function generateCandidateCard(c, idx, v) {
   const barSkills = c.strengthScores ? Object.keys(c.strengthScores).slice(0, 6) : skills.slice(0, 6);
   const barScores = c.strengthScores ? Object.values(c.strengthScores).slice(0, 6) : [95, 90, 88, 85, 82, 78];
   const candidateVideo = buildInlineCandidateVideo(c.videoLink, c.name);
-  const introMessage = c.recruiterNote || '';
+  const introMessage = capGeneratedWords(c.recruiterNote || '', 70);
 
   return `
     <div class="candidate-card">
@@ -3550,7 +3567,7 @@ ${candidates.slice(0, i).filter(prev => prev.recruiterNote).map(prev => `- ${pre
 
 You MUST use a different angle and opening word from every introduction above.` : ''}
 
-KEEP IT TIGHT: "why" = exactly 3-5 SHORT bullets separated by \\n. Each bullet is ONE line, max 15 words. Start with a specific fact (tool, number, cert). "note" = 3-5 short sentences (60-100 words). This is the only candidate intro shown on the card. Explain why this candidate fits this role. Use facts. No rambling. No filler. Do not label it as a recruiter note.
+KEEP IT TIGHT: "why" = exactly 3-5 SHORT bullets separated by \\n. Each bullet is ONE line, max 15 words. Start with a specific fact (tool, number, cert). "note" = 3-5 short sentences and 45-70 words. Never exceed 70 words. This is the only candidate intro shown on the card. Explain why this candidate fits this role. Use facts. No rambling. No filler. Do not label it as a recruiter note.
 
 "fitIndicators" = exactly 3 bullets. Each connects a SPECIFIC candidate skill/experience to a SPECIFIC client pain point or need from the client website/context. Format: "[Candidate fact] → [Why it matters for THIS client]". These appear as client-specific fit indicators on the card.
 
@@ -3605,6 +3622,13 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
             parsed = null;
             throw new Error('Generated copy missed Jesus’s voice standard');
           }
+          if (parsed?.note && generatedWordCount(parsed.note) > 70) {
+            if (attempt < 2) {
+              parsed = null;
+              throw new Error('Candidate introduction exceeded 70 words');
+            }
+            parsed.note = capGeneratedWords(parsed.note, 70);
+          }
         } catch(retryErr) {
           console.error('Attempt ' + (attempt+1) + ' failed for ' + c.name + ':', retryErr.message);
           if (attempt < 2) await new Promise(r => setTimeout(r, 5000)); // Wait before retry (rate limit buffer)
@@ -3623,7 +3647,7 @@ IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW co
             .map(s => s.length > 120 ? s.slice(0, 120).replace(/\s+\S*$/, '...') : s);
           if (bullets.length > 0) c.summary = bullets.map(neutralizePronouns).join('\n');
         }
-        if (parsed.note && !isGarbage(parsed.note)) c.recruiterNote = neutralizePronouns(parsed.note.length > 400 ? parsed.note.slice(0, 400).replace(/\s+\S*$/, '...') : parsed.note);
+        if (parsed.note && !isGarbage(parsed.note)) c.recruiterNote = capGeneratedWords(neutralizePronouns(parsed.note), 70);
         c.detailedNote = '';
         if (parsed.experience && !isGarbage(parsed.experience)) c.experience = parsed.experience;
         c.experience = reconcileExperienceLabel(c.experience, c.resumeData) || c.experience;
@@ -3720,6 +3744,8 @@ function runPublishAudit(html) {
   if (voiceFailures.length) issues.push(`${voiceFailures.length} generated text field(s) missed Jesus’s voice standard`);
   const introProblems = Array.from(doc.querySelectorAll('.candidate-card')).filter(card => card.querySelectorAll('.card-narrative').length !== 1);
   if (introProblems.length) issues.push(`${introProblems.length} card(s) do not have exactly one candidate introduction`);
+  const longIntroductions = Array.from(doc.querySelectorAll('.card-narrative')).filter(element => generatedWordCount(element.textContent || '') > 70);
+  if (longIntroductions.length) issues.push(`${longIntroductions.length} candidate introduction(s) exceed the 70-word limit`);
   const outboundCandidateVideos = Array.from(doc.querySelectorAll('.video-intro-btn')).filter(button => !button.classList.contains('gtc-info-btn') && /intro\s*video/i.test(button.textContent || ''));
   if (outboundCandidateVideos.length) issues.push(`${outboundCandidateVideos.length} candidate intro video(s) open as a button instead of playing inline`);
   const unsupportedVideos = candidates.filter(candidate => candidate.videoLink && candidateVideoSpec(candidate.videoLink)?.type === 'unsupported').map(candidate => candidate.name);
