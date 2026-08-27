@@ -3561,6 +3561,8 @@ Why bullets:
 Note: "Andrea doesn't wait for instructions, they build the playbook. At their current company they cut response times 40% by redesigning the dispatch workflow on their own. Hand them a messy process and check back in a month."
 
 DIFFERENTIATION RULE: Each candidate MUST have a unique angle. NEVER reuse a phrase, label, or opener across candidates in the same batch. If one note opens with years of experience, the next one opens somewhere else.
+
+ALWAYS SELL, NEVER SNIPE: The note exists to highlight the candidate. Every sentence must make the reader want to interview them. NEVER end on a line that could read as sarcasm, doubt, or criticism of the candidate (e.g. "Twenty years is a long time to still be learning the basics."). A rough edge is a candid FACT (a gap, a stretch, a tradeoff) stated plainly, never a jab at the person. If a closing line could be read two ways, rewrite it so it can only be read as a strength.
 ${candidates.slice(0, i).filter(prev => prev.recruiterNote).length ? `
 ALREADY WRITTEN INTRODUCTIONS (DO NOT repeat these phrases, angles, or openers):
 ${candidates.slice(0, i).filter(prev => prev.recruiterNote).map(prev => `- ${prev.name}: "${prev.recruiterNote}"`).join('\n')}
@@ -4158,7 +4160,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-21.10';
+const BUILDER_BUILD_STAMP = '2026-08-27.1';
 (function staleVersionGuard() {
   async function check() {
     try {
