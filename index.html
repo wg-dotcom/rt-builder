@@ -3283,11 +3283,15 @@ async function autoDeploy() {
   if (!v.roleTitle) { showToast('Enter a role title first (Tab 1).', 'error'); return; }
   if (candidates.length === 0) { showToast('No candidates loaded. Pull from Sheet first (Tab 2).', 'error'); return; }
 
+  let repoSlug = (v.clientName + '-' + v.roleTitle).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  if (!repoSlug) { showToast('Client name and role title need at least one letter or number to build the page address.', 'error'); return; }
+  if (repoSlug.length > 80) repoSlug = repoSlug.slice(0, 80).replace(/-+$/, '');
+  const repo = repoSlug + '-candidates';
+
   const btn = document.getElementById('deployBtn');
   btn.disabled = true;
   btn.innerHTML = '⏳ Deploying...';
 
-  const repo = (v.clientName + '-' + v.roleTitle).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') + '-candidates';
 
   showToast(`Creating <strong>${repo}</strong> and deploying...`, 'loading');
 
@@ -4160,7 +4164,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-27.1';
+const BUILDER_BUILD_STAMP = '2026-08-27.2';
 (function staleVersionGuard() {
   async function check() {
     try {
