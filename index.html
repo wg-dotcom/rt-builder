@@ -1686,7 +1686,7 @@ async function pullFromSheet() {
     const isInternalTrackingCol = h => /(^|\s)(status|internal|tracking)(\s|$)/.test(h) || h === 'notes' || h === 'note';
     const summaryIdx = headers.findIndex(h => !isInternalTrackingCol(h) && (h.includes('summary') || h.includes('highlight') || h.includes('about') || h.includes('bio') || h.includes('description') || ((h.includes('candidate') || h.includes('presentation')) && h.includes('note')) || h.includes('profile')));
 
-    candidates = [];
+    const pulled = [];
     let companyMatches = 0;
     const batchesSeen = new Set(), titlesSeen = new Set();
 
@@ -1715,7 +1715,7 @@ async function pullFromSheet() {
       }
       if (filterTitle && !title.toLowerCase().includes(filterTitle)) continue;
 
-      candidates.push({
+      pulled.push({
         name: name,
         company: company,
         title: titleIdx >= 0 ? (row[titleIdx] || '').trim() : '',
@@ -1732,9 +1732,10 @@ async function pullFromSheet() {
       });
     }
 
-    if (!candidates.length && filterCompany) {
+    const keptNote = candidates.length ? ` Your ${candidates.length} loaded candidate${candidates.length === 1 ? '' : 's'} were kept.` : '';
+    if (!pulled.length && filterCompany) {
       if (!companyMatches) {
-        showStatus('error', `No rows in the sheet match company "${filterCompany}". Check the spelling against the Company Name column in the sheet.`);
+        showStatus('error', `No rows in the sheet match company "${filterCompany}". Check the spelling against the Company Name column in the sheet.${keptNote}`);
         return;
       }
       const parts = [];
@@ -1743,11 +1744,15 @@ async function pullFromSheet() {
       const have = [];
       if (batchesSeen.size) have.push(`batch ${[...batchesSeen].join(', ')}`);
       if (titlesSeen.size) have.push(`title ${[...titlesSeen].map(t => '"' + t + '"').join(', ')}`);
-      showStatus('error', `${companyMatches} row${companyMatches === 1 ? '' : 's'} in the sheet match "${filterCompany}", but none match ${parts.join(' + ') || 'your filters'}. That company's rows have ${have.join(' and ') || 'no batch/title values'}. Fix the Batch Number or Role on the Customer tab (or fix the sheet) and pull again.`);
+      showStatus('error', `${companyMatches} row${companyMatches === 1 ? '' : 's'} in the sheet match "${filterCompany}", but none match ${parts.join(' + ') || 'your filters'}. That company's rows have ${have.join(' and ') || 'no batch/title values'}. Fix the Batch Number or Role on the Customer tab (or fix the sheet) and pull again.${keptNote}`);
+      return;
+    }
+    if (!pulled.length) {
+      showStatus('error', `No candidate rows found in the sheet.${keptNote}`);
       return;
     }
 
-    const dedupe = dedupeCandidates(candidates);
+    const dedupe = dedupeCandidates(pulled);
     candidates = dedupe.rows;
     updateCandidateList();
     const filters = [filterCompany && `company: "${filterCompany}"`, filterBatch && `batch: ${filterBatch}`, filterTitle && `title: "${filterTitle}"`].filter(Boolean).join(', ') || 'no filters';
@@ -4164,7 +4169,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-27.2';
+const BUILDER_BUILD_STAMP = '2026-08-31.1';
 (function staleVersionGuard() {
   async function check() {
     try {
