@@ -3893,6 +3893,7 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
     </div>
     ${generateComparisonTable(newCandidates, v)}
   `;
+    adaptBatchToPageFormat(doc, panel, newCandidates, v);
     const nativePanels = Array.from(doc.querySelectorAll('.batch-panel'));
     const lastNative = nativePanels[nativePanels.length - 1];
     if (!lastNative || !lastNative.parentNode) throw new Error('Existing page has no batch panels to attach to. Nothing was published.');
@@ -4044,6 +4045,7 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
     </div>
     ${generateComparisonTable(newCandidates, v)}
   `;
+  adaptBatchToPageFormat(doc, newPanel, newCandidates, v);
 
   // Insert new panel after the last existing batch panel (Array pop — :last-of-type misfires when siblings differ)
   const allBatchPanels = Array.from(doc.querySelectorAll('.batch-panel'));
@@ -4081,6 +4083,143 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
   if (batchNum) batchNum.textContent = `Batches 1-${batchN}`;
 
   return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+}
+
+// ── Adapt a merged batch to the target page's own card format ──
+// Live pages come from three template families: the matcher "book" cards
+// (card-rate + strength-bars + footer recruiter note), the legacy cards
+// (tags + strength-grid + card-video link), and this builder's own score-box
+// cards. Merging raw builder cards into the other two families broke live
+// member pages repeatedly (Aug–Sep 2026) and every repair converted the new
+// batch by hand. This does that conversion at deploy time.
+function adaptBatchToPageFormat(doc, newPanel, newCandidates, v) {
+  const otherPanels = Array.from(doc.querySelectorAll('.batch-panel')).filter(p => p !== newPanel && !newPanel.contains(p) && !p.contains(newPanel));
+  let refCard = null;
+  for (let i = otherPanels.length - 1; i >= 0 && !refCard; i--) {
+    refCard = otherPanels[i].querySelector('.candidate-card .card, .card, .candidate-card');
+  }
+  if (!refCard) return;
+  if (refCard.querySelector('.score-box')) return; // target page already uses this builder's card format
+  const isBook = !!(refCard.querySelector('.card-rate-amount') && (refCard.querySelector('.strength-bars') || refCard.querySelector('.card-recruiter-note')));
+  const isLegacy = !isBook && !!(refCard.querySelector('.strength-grid') || refCard.querySelector('a.card-video'));
+  if (!isBook && !isLegacy) return;
+
+  const fitTitle = (() => {
+    const t = Array.from(refCard.querySelectorAll('.card-section-title')).find(x => /fit indicators/i.test(x.textContent));
+    return t ? t.textContent.trim() : ((v.clientName || 'Member').trim() + ' Fit Indicators');
+  })();
+  const refAvatar = (refCard.querySelector('.card-avatar')?.textContent || '').trim();
+  const numericAvatars = /^\d+$/.test(refAvatar);
+  let cardCount = 0;
+  otherPanels.forEach(p => { cardCount += p.querySelectorAll('.card-name').length; });
+  let nextId = 0;
+  doc.querySelectorAll('[id^="candidate-"]').forEach(el => {
+    if (newPanel.contains(el)) return;
+    const n = parseInt(el.id.replace('candidate-', ''), 10);
+    if (!isNaN(n) && n >= nextId) nextId = n + 1;
+  });
+  if (!nextId) nextId = cardCount;
+
+  const PLAY_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+  const shareableVideo = (card, c) => {
+    let url = /^https?:\/\//i.test(c?.videoLink || '') ? c.videoLink.trim() : '';
+    if (!url) {
+      const media = card.querySelector('.candidate-video iframe, .candidate-video video, .candidate-video audio, .candidate-video a');
+      url = media?.getAttribute('src') || media?.getAttribute('href') || '';
+    }
+    if (!url) return null;
+    const audio = /vocaroo\.com/i.test(url) || !!card.querySelector('.candidate-audio');
+    let m;
+    if ((m = url.match(/drive\.google\.com\/file\/d\/([\w-]+)/i))) url = 'https://drive.google.com/file/d/' + m[1] + '/view';
+    else if ((m = url.match(/loom\.com\/(?:embed|share)\/([a-f0-9]+)/i))) url = 'https://www.loom.com/share/' + m[1];
+    else if ((m = url.match(/(?:youtube(?:-nocookie)?\.com\/embed\/|youtu\.be\/)([\w-]+)/i))) url = 'https://youtu.be/' + m[1];
+    else if ((m = url.match(/vocaroo\.com\/(?:embed\/)?(\w+)/i))) url = 'https://vocaroo.com/' + m[1];
+    return { url: url, label: audio ? 'Listen to Voice Intro' : 'Watch Intro Video' };
+  };
+  const barsFrom = c => {
+    let entries = c && c.strengthScores ? Object.entries(c.strengthScores) : [];
+    if (!entries.length && c && c.skills) entries = c.skills.split(',').map(s => s.trim()).filter(Boolean).map((s, i) => [s, 91 - i * 2]);
+    return entries.slice(0, 6).map(([label, w]) => [label, Math.max(70, Math.min(92, parseInt(w, 10) || 84))]);
+  };
+
+  Array.from(newPanel.querySelectorAll('.candidate-card')).forEach((wrapper, i) => {
+    const c = newCandidates[i] || {};
+    const card = wrapper.querySelector('.card') || wrapper;
+    const scoreValues = {};
+    card.querySelectorAll('.score-cell').forEach(cell => {
+      scoreValues[(cell.querySelector('.score-label')?.textContent || '').trim()] = (cell.querySelector('.score-value')?.textContent || '').trim();
+    });
+    const salary = scoreValues['Salary'] || fmtSalary(c.salary || v.salaryRange) || '—';
+    const video = shareableVideo(card, c);
+    const note = (c.recruiterNote || '').trim() || (card.querySelector('.card-narrative')?.textContent || '').trim();
+    card.querySelectorAll('section.candidate-video').forEach(x => x.remove());
+    card.querySelectorAll('details.resume-details, details.cv').forEach(x => x.remove());
+
+    if (isBook) {
+      wrapper.className = 'candidate-card';
+      const sb = card.querySelector('.score-box');
+      if (sb) {
+        const rate = doc.createElement('div');
+        rate.className = 'card-rate';
+        rate.innerHTML = '<div class="card-rate-amount">' + escHTML(salary) + '</div><div class="card-rate-period">USD / Month</div>';
+        sb.replaceWith(rate);
+      }
+      card.querySelectorAll('.card-section-title').forEach(t => {
+        const txt = t.textContent.trim().toLowerCase();
+        if (txt === 'core strengths') t.textContent = 'Platforms & Tools';
+        if (txt === 'relevant evidence') t.textContent = fitTitle;
+      });
+      const body = card.querySelector('.card-body') || card;
+      let actions = card.querySelector('.card-actions');
+      if (!actions) { actions = doc.createElement('div'); actions.className = 'card-actions'; body.appendChild(actions); }
+      if (refCard.querySelector('.strength-bars') && !card.querySelector('.strength-bars')) {
+        const bars = barsFrom(c);
+        if (bars.length) {
+          const holder = doc.createElement('div');
+          holder.innerHTML = '<div class="card-section-title">Strength Profile</div><div class="strength-bars">' +
+            bars.map(([label, w]) => '<div class="bar-item"><div class="bar-label">' + escHTML(label) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + w + '%"></div></div></div>').join('') + '</div>';
+          while (holder.firstChild) actions.parentNode.insertBefore(holder.firstChild, actions);
+        }
+      }
+      if (video && !Array.from(actions.querySelectorAll('a')).some(a => (a.getAttribute('href') || '') === video.url)) {
+        actions.insertAdjacentHTML('afterbegin', '<a class="video-intro-btn" href="' + escHTML(video.url) + '" target="_blank" rel="noopener">' + PLAY_SVG + video.label + '</a>');
+      }
+      if (!actions.querySelector('a')) actions.remove();
+      const narrative = card.querySelector('.card-narrative');
+      if (narrative) narrative.remove();
+      if (note && !card.querySelector('.card-recruiter-note')) {
+        card.insertAdjacentHTML('beforeend', '<div class="card-footer"><div class="card-recruiter-note"><div class="recruiter-note-title">Recruiter Note</div><p>' + escHTML(note) + '</p></div></div>');
+      }
+      card.id = 'candidate-' + nextId;
+      nextId += 1;
+      cardCount += 1;
+      const avatar = card.querySelector('.card-avatar');
+      if (avatar) avatar.textContent = numericAvatars ? String(cardCount).padStart(2, '0') : ((c.name || avatar.textContent).trim().charAt(0).toUpperCase());
+    } else {
+      const name = (card.querySelector('.card-name')?.textContent || c.name || '').trim();
+      const locHTML = card.querySelector('.card-location')?.innerHTML || escHTML(c.location || '');
+      const exp = Array.from(card.querySelectorAll('.exp-item')).map((item, j, all) => {
+        const hi = Array.from(item.querySelectorAll('.exp-highlight-list li')).map(li => li.textContent.trim()).join(' · ');
+        return '<div class="exp-item"><div class="exp-dot-col"><div class="exp-dot"></div>' + (j < all.length - 1 ? '<div class="exp-line"></div>' : '') + '</div><div class="exp-content"><div class="exp-role">' + escHTML(item.querySelector('.exp-role')?.textContent.trim() || '') + '</div><div class="exp-company">' + escHTML(item.querySelector('.exp-company')?.textContent.trim() || '') + '</div><div class="exp-date">' + escHTML(item.querySelector('.exp-period, .exp-date')?.textContent.trim() || '') + '</div>' + (hi ? '<div class="exp-highlight">' + escHTML(hi) + '</div>' : '') + '</div></div>';
+      }).join('');
+      const tags = Array.from(card.querySelectorAll('.ctag')).map((t, j) => '<span class="tag' + (j < 5 ? ' key' : '') + '">' + escHTML(t.textContent.trim()) + '</span>').join('');
+      const bars = barsFrom(c).map(([label, w]) => '<div class="strength-item"><span class="strength-label">' + escHTML(label) + '</span><div class="strength-bar-bg"><div class="strength-bar" style="width: ' + w + '%"></div></div></div>').join('');
+      const rateShort = salary.replace(/\s*\/\s*mo\.?$/i, '');
+      const fits = '<div class="fit-item"><div class="fit-label">Location</div><div class="fit-value">' + escHTML(scoreValues['Location'] || c.location || '') + '</div></div>' +
+        '<div class="fit-item"><div class="fit-label">Schedule</div><div class="fit-value">' + escHTML(scoreValues['Schedule'] || v.schedule || 'Full-time · US hours') + '</div></div>' +
+        '<div class="fit-item"><div class="fit-label">Rate</div><div class="fit-value">' + escHTML(rateShort + ' / month') + '</div></div>';
+      const videoLink = video ? '<a class="card-video" href="' + escHTML(video.url) + '" rel="noopener" target="_blank"><svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> ' + video.label + '</a>' : '';
+      wrapper.className = 'candidate-card fade-in';
+      wrapper.innerHTML = '<div class="card"><div class="card-top"><div class="card-identity"><div class="card-avatar">' + escHTML(name.charAt(0).toUpperCase()) + '</div><div><div class="card-name">' + escHTML(name) + '</div><div class="card-location">' + locHTML + '</div></div></div><div class="card-rate"><div class="card-rate-amount">' + escHTML(rateShort) + '</div><div class="card-rate-period">USD / Month</div></div></div><div class="card-body">' +
+        (exp ? '<div class="card-section-title">Experience</div><div class="experience-list">' + exp + '</div>' : '') +
+        (tags ? '<div class="card-section-title">Core Competencies</div><div class="tags">' + tags + '</div>' : '') +
+        '<div class="card-section-title">' + escHTML(fitTitle) + '</div><div class="fit-grid">' + fits + '</div>' +
+        (bars ? '<div class="card-section-title">Strength Profile</div><div class="strength-grid">' + bars + '</div>' : '') +
+        videoLink +
+        (note ? '<div class="recruiter-note"><div class="recruiter-note-label">Recruiter Note</div><p>' + escHTML(note) + '</p></div>' : '') +
+        '</div></div>';
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4169,7 +4308,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-08-31.1';
+const BUILDER_BUILD_STAMP = '2026-09-15.1';
 (function staleVersionGuard() {
   async function check() {
     try {
