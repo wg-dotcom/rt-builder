@@ -3301,6 +3301,10 @@ async function autoDeploy() {
   showToast(`Creating <strong>${repo}</strong> and deploying...`, 'loading');
 
   try {
+    // Refuse to publish from an outdated tab: stale builder tabs kept deploying
+    // broken batches days after the fix shipped (RSA batch 5, Sep 2026).
+    await assertBuilderFresh();
+
     let publisherKey = getPublisherKey();
     if (!publisherKey) publisherKey = await promptPublisherKey('Publisher access is required to deploy.');
     if (!publisherKey) throw new Error('Publisher access key is required.');
@@ -4308,7 +4312,21 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-09-15.1';
+const BUILDER_BUILD_STAMP = '2026-09-17.1';
+// Deploy-time hard stop: a stale tab may not publish. A network hiccup during the
+// check never blocks a deploy; only a confirmed version mismatch does.
+async function assertBuilderFresh() {
+  let latest = '';
+  try {
+    const res = await fetch(location.pathname + '?build-check=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const m = (await res.text()).match(/BUILDER_BUILD_STAMP = '([^']+)'/);
+    if (m) latest = m[1];
+  } catch (e) { return; }
+  if (latest && latest !== BUILDER_BUILD_STAMP) {
+    throw new Error('This builder tab is outdated (yours: ' + BUILDER_BUILD_STAMP + ', latest: ' + latest + '). Deploy stopped so the page is not built with old code. Reload this page, pull your candidates again, and deploy from the fresh tab.');
+  }
+}
 (function staleVersionGuard() {
   async function check() {
     try {
