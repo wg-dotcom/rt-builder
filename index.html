@@ -1962,14 +1962,22 @@ function commitPreviewEdits() {
   if (previewEditing) { markPreviewText(false); previewEditing = false; }
   generatedHTML = serializePreviewDocument(); rememberPreviewEdit(); updatePreviewEditControls();
 }
-function applyPreviewEditsToMergedPage(targetHTML, editedHTML, batchNumber) {
+function applyPreviewEditsToMergedPage(targetHTML, editedHTML, batchNumber, newCandidates, v) {
   if (!editedHTML) return targetHTML;
   const parser = new DOMParser();
   const target = parser.parseFromString(targetHTML, 'text/html');
   const edited = parser.parseFromString(editedHTML, 'text/html');
   const targetPanel = target.getElementById('batch-' + batchNumber);
   const editedPanel = edited.getElementById('batch-' + batchNumber);
-  if (targetPanel && editedPanel) targetPanel.innerHTML = editedPanel.innerHTML;
+  if (targetPanel && editedPanel) {
+    targetPanel.innerHTML = editedPanel.innerHTML;
+    // The edited preview carries the builder's own raw card markup, which undoes
+    // the format conversion the merge just did (RSA batch 5 / AP batch 6, Sep 2026).
+    // Convert the swapped-in panel to the target page's card family again.
+    if (newCandidates && newCandidates.length) {
+      adaptBatchToPageFormat(target, targetPanel, newCandidates, v || {});
+    }
+  }
   return '<!DOCTYPE html>\n' + target.documentElement.outerHTML;
 }
 
@@ -3358,7 +3366,7 @@ async function autoDeploy() {
     if (existingHTML && parseInt(v.batchNumber) > 1) {
       showToast(`Merging Batch ${v.batchNumber} into existing page...`, 'loading');
       generatedHTML = mergeBatchIntoExisting(existingHTML, candidates, v);
-      generatedHTML = applyPreviewEditsToMergedPage(generatedHTML, editedPreviewHTML, parseInt(v.batchNumber));
+      generatedHTML = applyPreviewEditsToMergedPage(generatedHTML, editedPreviewHTML, parseInt(v.batchNumber), candidates, v);
     } else if (parseInt(v.batchNumber) > 1 && fileExistsOnRepo) {
       throw new Error('Could not fetch existing page content to merge batch ' + v.batchNumber + ' into. Deploy stopped to avoid overwriting prior batches.');
     } else {
@@ -4155,7 +4163,8 @@ function adaptBatchToPageFormat(doc, newPanel, newCandidates, v) {
     });
     const salary = scoreValues['Salary'] || fmtSalary(c.salary || v.salaryRange) || '—';
     const video = shareableVideo(card, c);
-    const note = (c.recruiterNote || '').trim() || (card.querySelector('.card-narrative')?.textContent || '').trim();
+    // Prefer the card's own narrative text: it carries any preview edits the TA made.
+    const note = (card.querySelector('.card-narrative')?.textContent || '').trim() || (c.recruiterNote || '').trim();
     card.querySelectorAll('section.candidate-video').forEach(x => x.remove());
     card.querySelectorAll('details.resume-details, details.cv').forEach(x => x.remove());
 
@@ -4312,7 +4321,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-09-17.1';
+const BUILDER_BUILD_STAMP = '2026-09-21.1';
 // Deploy-time hard stop: a stale tab may not publish. A network hiccup during the
 // check never blocks a deploy; only a confirmed version mismatch does.
 async function assertBuilderFresh() {
