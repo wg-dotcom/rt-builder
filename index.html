@@ -246,7 +246,7 @@
       <img src="https://saganrecruitment.com/wp-content/uploads/2025/10/Sagan-Logo-2-e1759568299542.png" alt="Sagan" />
       <span style="opacity:0.3;font-size:18px;">|</span>
       Recruiting Builder
-      <span class="topbar-badge">ONE BUILDER</span>
+      <span class="topbar-badge" id="builderVersion">ONE BUILDER</span>
     </div>
     <div class="topbar-actions">
       <span class="preview-edit-status" id="previewEditStatus">Preview text is locked</span>
@@ -388,9 +388,9 @@
               <optgroup label="White Glove Talent Advisors">
                 <option value="miguel">Miguel Agudelo</option>
                 <option value="guillermo">Guillermo Lindo</option>
-                <option value="katherine">Katherine R</option>
               </optgroup>
               <optgroup label="Recruiting Team">
+                <option value="katherine">Kathe</option>
                 <option value="priscilla" selected>Priscilla Montenegro</option>
                 <option value="manuel">Manuel Jaramillo</option>
                 <option value="andrea">Andrea Mendoza</option>
@@ -543,6 +543,10 @@ function visibleCopyMissesJesusVoice(value) {
 let candidates = [];
 let generatedHTML = '';
 let previewEditBase = '', previewEditHistory = [], previewEditing = false, previewHasEdits = false;
+let previewContext = '';
+function presentationContext(v, rows) {
+  return JSON.stringify([v, rows.map(c => [c.name, c.resumeLink, c.videoLink, c.salary, c.location])]);
+}
 
 // Format numbers with commas: 4000 → "4,000", "$2500/mo" → "$2,500/mo"
 function fmtNum(str) {
@@ -553,6 +557,9 @@ function fmtNum(str) {
 function fmtSalary(str) {
   if (!str) return '';
   let s = String(str).replace(/\.0+$/g, '').trim();
+  // Do not turn $2.5k into $2/mo, $18/hour into $18/mo, or a locale-formatted
+  // decimal into a different amount. Keep ambiguous formats exactly as supplied.
+  if (/\d\s*k\b|\d\.\d|\/(?:h|hr|hour|wk|week|day)\b|per\s+(?:hour|week|day)|hourly|weekly|daily/i.test(s)) return s;
   const periodSuffix = /\/(?:yr|year)\b|per\s+year|annual/i.test(s) ? '/year' : '/mo';
   const rangeMatch = s.match(/(\$?\s*[\d,]+)\s*[-–—]\s*(\$?\s*[\d,]+)/);
   if (rangeMatch) {
@@ -1059,9 +1066,10 @@ const ADVISORS = {
     summary: 'Guillermo connects skilled candidates with the right opportunities. He is your direct point of contact for interview scheduling, feedback, and next steps.'
   },
   katherine: {
-    name: 'Katherine R', role: 'Sagan · White Glove Talent Advisor',
-    photo: 'https://avatars.slack-edge.com/2026-07-01/11480985047319_74134341a7d527ba9f3a_original.png',
-    summary: 'Katherine focuses on getting the right person into the right seat, fast. She is your direct point of contact for interview scheduling, feedback, and next steps.'
+    name: 'Kathe', role: 'Sagan · Talent Advisor',
+    email: 'katherine.r@getsagan.com',
+    photo: 'https://avatars.slack-edge.com/2026-09-10/12033580463990_6966e4ad842b8eadebb4_original.png',
+    summary: 'Kathe is your Talent Advisor for this search. Tell her who you want to meet. She will coordinate the interviews, collect your feedback, and keep the next steps moving.'
   },
   priscilla: {
     name: 'Priscilla Montenegro',
@@ -1472,7 +1480,7 @@ function applyWorkflowPreset() {
   if (!sheet.value.trim() || knownPreset) sheet.value = SHEET_PRESETS[workflow];
   const advisor = document.getElementById('advisor');
   if (workflow === 'white-glove' && ['priscilla', 'manuel'].includes(advisor.value)) advisor.value = 'miguel';
-  if (workflow === 'core' && ['miguel', 'guillermo', 'katherine'].includes(advisor.value)) advisor.value = 'priscilla';
+  if (workflow === 'core' && ['miguel', 'guillermo'].includes(advisor.value)) advisor.value = 'priscilla';
 }
 
 function decodeMatcherHandoff(token) {
@@ -1598,6 +1606,14 @@ function isProgramValue(value) {
   return status.includes('talent agent') || status.includes('global talent coaching') || status.includes('global talent consulting') || /(^|\W)(gtc|tap)(\W|$)/.test(status);
 }
 
+function matchesBatchFilter(value, requested, company) {
+  const requestedNumber = String(requested || '').trim().match(/^(?:batch\s*)?(\d+)$/i);
+  if (!requestedNumber) return false;
+  const actual = String(value || '').trim().match(/^(?:batch\s*)?(\d+)$/i)
+    || (!String(value || '').trim() && String(company || '').match(/\bbatch\s+(\d+)\b/i));
+  return !!actual && Number(actual[1]) === Number(requestedNumber[1]);
+}
+
 async function pullFromSheet() {
   const statusEl = document.getElementById('sheetStatus');
   const url = document.getElementById('sheetUrl').value.trim();
@@ -1710,7 +1726,7 @@ async function pullFromSheet() {
       if (title) titlesSeen.add(title);
       if (filterBatch) {
         // Check dedicated batch column first, then fall back to looking in company name
-        const batchMatch = batch ? batch.toLowerCase().includes(filterBatch) : company.toLowerCase().includes('batch ' + filterBatch);
+        const batchMatch = matchesBatchFilter(batch, filterBatch, company);
         if (!batchMatch) continue;
       }
       if (filterTitle && !title.toLowerCase().includes(filterTitle)) continue;
@@ -1875,6 +1891,7 @@ async function generatePreview() {
     await generateResumeData();
   }
   generatedHTML = buildPresentationHTML();
+  previewContext = presentationContext(getFormValues(), candidates);
   previewEditBase = generatedHTML;
   previewEditHistory = [generatedHTML];
   previewEditing = false;
@@ -1978,6 +1995,7 @@ function applyPreviewEditsToMergedPage(targetHTML, editedHTML, batchNumber, newC
       adaptBatchToPageFormat(target, targetPanel, newCandidates, v || {});
     }
   }
+  finalizeMergedPresentation(target, v);
   return '<!DOCTYPE html>\n' + target.documentElement.outerHTML;
 }
 
@@ -2387,7 +2405,7 @@ function buildPresentationHTML() {
   <section class="footer-cta fade-in">
     <h2>Ready to <strong>meet your next ${escHTML(v.roleTitle)}?</strong></h2>
     <p>Tell us who you want to interview and we'll set it up within 24 hours.</p>
-    <a class="footer-contact" href="mailto:jesus.p@getsagan.com">Schedule Next Steps</a>
+    <a class="footer-contact" href="mailto:${escHTML(advisor.email || 'jesus.p@getsagan.com')}">Schedule Next Steps</a>
   </section>
 
   <footer class="site-footer">
@@ -3236,7 +3254,7 @@ async function watchDeployGoLive(liveUrl, expectedHtml, repo, publisherKey) {
     urlField.parentElement.appendChild(statusEl);
   }
   const started = Date.now();
-  const matches = t => t.length === expectedHtml.length && t.slice(0, 500) === expectedHtml.slice(0, 500) && t.slice(-500) === expectedHtml.slice(-500);
+  const matches = t => publishedHTMLMatches(t, expectedHtml);
   let nudges = 0;
   let lastWorkerCheck = 0;
   while (Date.now() - started < 15 * 60 * 1000) {
@@ -3247,12 +3265,12 @@ async function watchDeployGoLive(liveUrl, expectedHtml, repo, publisherKey) {
         statusEl.style.color = 'var(--green)';
         statusEl.textContent = '✓ Live on GitHub Pages, verified just now. Safe to share the link.';
         showToast(`Your page is live and verified:<br><a href="${liveUrl}" target="_blank" style="color:var(--green);font-weight:700;font-size:14px;">${liveUrl}</a>`, 'success');
-        return;
+        return true;
       }
     } catch (e) { /* keep polling */ }
     const mins = Math.floor((Date.now() - started) / 60000);
     statusEl.style.color = 'var(--text-muted)';
-    statusEl.textContent = `⏳ GitHub is publishing your page (${mins < 1 ? 'under a minute' : mins + ' min'} elapsed). Your deploy is saved. Do NOT deploy again, the page will update on its own.`;
+    statusEl.textContent = `GitHub is publishing your page (${mins < 1 ? 'under a minute' : mins + ' min'} elapsed). The commit is saved. Wait for live verification before sharing.`;
     const elapsed = Date.now() - started;
     if (elapsed > (nudges + 1) * 4 * 60 * 1000) {
       // 4+ minutes without going live: ask GitHub for a fresh build
@@ -3266,8 +3284,16 @@ async function watchDeployGoLive(liveUrl, expectedHtml, repo, publisherKey) {
     await new Promise(r => setTimeout(r, 12000));
   }
   statusEl.style.color = 'var(--text-muted)';
-  statusEl.textContent = 'GitHub Pages is unusually slow right now (see githubstatus.com). Your deploy IS saved and will appear when GitHub catches up. No need to deploy again.';
+  statusEl.style.color = 'var(--red)';
+  statusEl.textContent = 'The commit was saved, but I could not verify the live page after 15 minutes. Do not share it yet. Check the GitHub Pages build or ask Jesus for help; publishing again is not a confirmed fix.';
+  return false;
 }
+
+function publishedHTMLMatches(actual, expected) {
+  return String(actual).replace(/\r\n/g, '\n').trim() === String(expected).replace(/\r\n/g, '\n').trim();
+}
+
+let deployInProgress = false;
 
 function showToast(msg, type) {
   const t = document.getElementById('deployToast');
@@ -3290,14 +3316,20 @@ function nextBatchNumberFromHTML(html) {
 }
 
 async function autoDeploy() {
+  if (deployInProgress) { showToast('A publish is already running. Wait for live verification.', 'loading'); return; }
   commitPreviewEdits();
   const editedPreviewHTML = previewHasEdits ? generatedHTML : '';
   const v = getFormValues();
 
   // Validation
+  if (editedPreviewHTML && previewContext !== presentationContext(v, candidates)) {
+    showToast('The candidates or settings changed after this preview. Generate a new preview before publishing so old edits cannot bring removed candidates back.', 'error');
+    return;
+  }
   if (!v.clientName) { showToast('Enter a client name first (Tab 1).', 'error'); return; }
   if (!v.roleTitle) { showToast('Enter a role title first (Tab 1).', 'error'); return; }
   if (candidates.length === 0) { showToast('No candidates loaded. Pull from Sheet first (Tab 2).', 'error'); return; }
+  const publishContext = presentationContext(v, candidates);
 
   let repoSlug = (v.clientName + '-' + v.roleTitle).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
   if (!repoSlug) { showToast('Client name and role title need at least one letter or number to build the page address.', 'error'); return; }
@@ -3306,6 +3338,7 @@ async function autoDeploy() {
 
   const btn = document.getElementById('deployBtn');
   btn.disabled = true;
+  deployInProgress = true;
   btn.innerHTML = '⏳ Deploying...';
 
 
@@ -3364,6 +3397,7 @@ async function autoDeploy() {
 
     // 4a. Extract real resume data BEFORE building cards
     await generateResumeData();
+    if (publishContext !== presentationContext(getFormValues(), candidates)) throw new Error('The candidates or settings changed while publishing. Review the preview and publish again. Nothing was sent.');
 
     // 4b. Generate HTML — merge if multi-batch, otherwise fresh
     if (existingHTML && parseInt(v.batchNumber) > 1) {
@@ -3377,7 +3411,9 @@ async function autoDeploy() {
     }
 
     // Pre-publish audit — flags common leaks so nothing broken ships
-    const audit = runPublishAudit(generatedHTML);
+    const structuralIssues = validatePresentationStructure(generatedHTML, v, candidates);
+    if (structuralIssues.length) throw new Error('Publish stopped: ' + structuralIssues.join(' '));
+    const audit = runPublishAudit(generatedHTML, v);
     if (!audit.ok) {
       const proceed = confirm(
         '⚠️ Pre-publish audit found ' + audit.issues.length + ' issue' + (audit.issues.length === 1 ? '' : 's') + ':\n\n' +
@@ -3427,7 +3463,8 @@ async function autoDeploy() {
       urlField = document.getElementById('deployedUrl');
     }
     urlField.value = liveUrl;
-    watchDeployGoLive(liveUrl, generatedHTML, repo, publisherKey);
+    btn.innerHTML = 'Verifying live page...';
+    await watchDeployGoLive(liveUrl, generatedHTML, repo, publisherKey);
 
   } catch(err) {
     // If the limited publisher key was rejected, clear it and offer a one-time retry.
@@ -3443,6 +3480,7 @@ async function autoDeploy() {
     }
     showToast('Deploy failed: ' + err.message, 'error');
   } finally {
+    deployInProgress = false;
     btn.disabled = false;
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg> Deploy';
   }
@@ -3735,9 +3773,10 @@ function showAIStatus(type, msg) {
 // ═══════════════════════════════════════════════════════════════
 // PRE-PUBLISH AUDIT — flags common leaks before HTML ships to GitHub
 // ═══════════════════════════════════════════════════════════════
-function runPublishAudit(html) {
+function runPublishAudit(html, v) {
   const issues = [];
   const doc = new DOMParser().parseFromString(html, 'text/html');
+  const reviewRoot = v ? (doc.getElementById('batch-' + v.batchNumber) || doc) : doc;
   const body = doc.body ? (doc.body.textContent || '') : '';
 
   ['See profile', 'Not Fetched', 'Unverified', 'Coming soon', 'Location TBD', 'Salary TBD', 'Exp TBD'].forEach(p => {
@@ -3779,7 +3818,7 @@ function runPublishAudit(html) {
   const missingInlineMedia = candidates.filter((candidate, index) => {
     const spec = candidateVideoSpec(candidate.videoLink);
     if (!spec || spec.type === 'unsupported') return false;
-    return !doc.querySelectorAll('.candidate-card')[index]?.querySelector('.candidate-video video, .candidate-video iframe, .candidate-video audio');
+    return !presentationCards(reviewRoot)[index]?.querySelector('.candidate-video video, .candidate-video iframe, .candidate-video audio');
   }).map(candidate => candidate.name);
   if (missingInlineMedia.length) issues.push(`${missingInlineMedia.length} valid candidate introduction(s) are not embedded inline: ${missingInlineMedia.slice(0, 4).join(', ')}`);
 
@@ -3826,6 +3865,154 @@ function runPublishAudit(html) {
   if (genderedCopy.length) issues.push(`${genderedCopy.length} generated note(s) contain gendered pronouns — use the candidate name or they/them`);
 
   return { ok: issues.length === 0, issues };
+}
+
+function presentationBatchNumber(element) {
+  const value = element.getAttribute('data-batch') || element.id || element.getAttribute('onclick') || '';
+  const match = value.match(/^(\d+)$|batch-?(\d+)|(?:showBatch|selectPresentationBatch)\((\d+)\)/i);
+  return match ? Number(match[1] || match[2] || match[3]) : NaN;
+}
+
+function presentationCards(root) {
+  return Array.from(root.querySelectorAll('.candidate-card, .card')).filter(card =>
+    card.querySelector('.card-name') && !card.parentElement?.closest('.candidate-card, .card'));
+}
+
+function finalizeMergedPresentation(doc, v) {
+  const advisor = ADVISORS[v.advisor];
+  if (!advisor) throw new Error('Select a Talent Advisor before publishing.');
+  const legacyAdvisor = doc.querySelectorAll('.team-section .team-card').length === 1 ? doc.querySelector('.team-section .team-card') : null;
+  if (!doc.querySelector('.advisor-name') && legacyAdvisor) {
+    [['.team-name','advisor-name'],['.team-role','advisor-role'],['.team-bio','advisor-summary'],['.team-photo','advisor-avatar']].forEach(([selector, cls]) => legacyAdvisor.querySelector(selector)?.classList.add(cls));
+    legacyAdvisor.classList.add('advisor-section');
+    const email = legacyAdvisor.querySelector('.team-email');
+    if (email) email.textContent = advisor.email || 'jesus.p@getsagan.com';
+  }
+  const advisorName = doc.querySelector('.advisor-name');
+  if (!advisorName) throw new Error('This older page has an unsupported advisor section. Nothing was published; ask Jesus to migrate it.');
+  const fields = { '.advisor-name': advisor.name, '.advisor-role': advisor.role, '.advisor-summary': advisor.summary };
+  Object.entries(fields).forEach(([selector, value]) => doc.querySelectorAll(selector).forEach(el => { el.textContent = value; }));
+  doc.querySelectorAll('.advisor-avatar').forEach(el => { el.setAttribute('src', advisor.photo); el.setAttribute('alt', advisor.name); });
+  doc.querySelectorAll('.advisor-section a[href^="mailto:"], .footer-contact[href^="mailto:"]').forEach(el => {
+    el.setAttribute('href', 'mailto:' + (advisor.email || 'jesus.p@getsagan.com'));
+  });
+
+  const panels = Array.from(doc.querySelectorAll('.batch-panel')).sort((a, b) => presentationBatchNumber(a) - presentationBatchNumber(b));
+  if (!panels.length || panels.some(p => !Number.isInteger(presentationBatchNumber(p)))) throw new Error('Cannot identify the existing batches safely. Nothing was published.');
+  const latest = Math.max(...panels.map(presentationBatchNumber));
+  const edited = panels.find(p => presentationBatchNumber(p) === Number(v.batchNumber));
+  const idCounts = new Map();
+  doc.querySelectorAll('[id]').forEach(el => idCounts.set(el.id, (idCounts.get(el.id) || 0) + 1));
+  // IDs in an edited preview restart at zero. Namespace only that batch so
+  // earlier cards and their anchors stay intact, even when replacing batch 2 of 7.
+  for (const scopedPanel of panels.filter(p => p === edited || Array.from(p.querySelectorAll('[id]')).some(el => idCounts.get(el.id) > 1))) {
+    const replacements = new Map();
+    scopedPanel.querySelectorAll('[id]').forEach(el => {
+      const old = el.id;
+      const prefix = 'batch-' + presentationBatchNumber(scopedPanel) + '-';
+      const next = old.startsWith(prefix) ? old : prefix + old;
+      replacements.set(old, next); el.id = next;
+    });
+    scopedPanel.querySelectorAll('*').forEach(el => Array.from(el.attributes).forEach(attr => {
+      if (attr.name === 'href' && attr.value.startsWith('#') && replacements.has(attr.value.slice(1))) el.setAttribute(attr.name, '#' + replacements.get(attr.value.slice(1)));
+      if (['for', 'aria-controls', 'aria-labelledby'].includes(attr.name)) el.setAttribute(attr.name, attr.value.split(' ').map(id => replacements.get(id) || id).join(' '));
+      if (attr.name.startsWith('on')) {
+        let value = attr.value;
+        replacements.forEach((next, old) => { value = value.split("'" + old + "'").join("'" + next + "'").split('"' + old + '"').join('"' + next + '"'); });
+        el.setAttribute(attr.name, value);
+      }
+    }));
+  }
+  const panelParent = panels[0].parentElement;
+  if (!panels.every(p => p.parentElement === panelParent)) throw new Error('Batch panels have different containers. Nothing was published.');
+  // Sort within their original slot; do not move footers or advisor sections.
+  const marker = doc.createComment('ordered presentation batches');
+  panelParent.insertBefore(marker, panels[0]);
+  let rank = 0;
+  panels.forEach(panel => {
+    panelParent.insertBefore(panel, marker);
+    const number = presentationBatchNumber(panel);
+    panel.dataset.builderBatch = String(number);
+    panel.dataset.builderBatchHidden = String(number !== latest);
+    panel.classList.toggle('hidden', number !== latest);
+    panel.classList.toggle('active', number === latest);
+    presentationCards(panel).forEach(card => {
+      rank++;
+      const avatar = card.querySelector('.card-avatar');
+      if (avatar && /^\d+$/.test(avatar.textContent.trim())) avatar.textContent = String(rank).padStart(2, '0');
+    });
+  });
+  marker.remove();
+  const buttons = Array.from(doc.querySelectorAll('.batch-btn, .batch-tab')).sort((a, b) => presentationBatchNumber(a) - presentationBatchNumber(b));
+  buttons.forEach(button => {
+    const number = presentationBatchNumber(button);
+    const panel = panels.find(p => presentationBatchNumber(p) === number);
+    if (!panel) throw new Error('A batch button has no matching candidates. Nothing was published.');
+    button.dataset.batch = String(number);
+    button.setAttribute('onclick', `selectPresentationBatch(${number})`);
+    button.classList.toggle('active', number === latest);
+    button.setAttribute('aria-pressed', String(number === latest));
+    const count = button.querySelector('.batch-count, .batch-tab-count');
+    if (count) count.textContent = String(presentationCards(panel).length);
+    button.parentElement.appendChild(button);
+  });
+  doc.querySelectorAll('h1 em').forEach(el => { if (/to consider/i.test(el.textContent)) el.textContent = rank + ' to consider.'; });
+  doc.querySelectorAll('strong, .hero-meta-value').forEach(el => {
+    if (/^\d+ profiles$/i.test(el.textContent.trim())) el.textContent = rank + ' profiles';
+    if (/^All \d+$/i.test(el.textContent.trim())) el.textContent = 'All ' + rank;
+  });
+  doc.querySelectorAll('.batch-num').forEach(el => { el.textContent = 'Batches 1-' + latest; });
+  let style = doc.querySelector('[data-builder-batches-style]');
+  if (!style) { style = doc.createElement('style'); style.setAttribute('data-builder-batches-style', '1'); doc.head.appendChild(style); }
+  style.textContent = '[data-builder-batch][data-builder-batch-hidden="true"]{display:none!important}[data-builder-batch][data-builder-batch-hidden="false"]{display:block!important}.batch-tabs,.batch-switcher{flex-wrap:wrap}';
+  // Older templates have no styles for embedded resources. Carry only the
+  // resource styles across; never inject a different page theme.
+  let resources = doc.querySelector('style[data-builder-resources]');
+  if (!resources) { resources = doc.createElement('style'); resources.setAttribute('data-builder-resources', '1'); doc.head.appendChild(resources); }
+  resources.textContent = PRESENTATION_RESUME_CSS + `
+    .batch-panel .candidate-video{margin:24px 0}.batch-panel .candidate-video-label{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px;font-size:14px;color:var(--text-primary,#093a3e)}
+    .batch-panel .candidate-video-frame{aspect-ratio:16/9;overflow:hidden;border:1px solid var(--border,#d8d4cc);border-radius:16px;background:#093a3e}
+    .batch-panel .candidate-video-frame video,.batch-panel .candidate-video-frame iframe{display:block;width:100%;height:100%;border:0;object-fit:contain}
+    .batch-panel .candidate-audio-frame{padding:18px}.batch-panel .candidate-audio-frame audio,.batch-panel .candidate-audio-frame iframe{width:100%;border:0}
+    .batch-panel .resume-details{margin-top:18px;border:1px solid var(--border,#d8d4cc);border-radius:16px;background:var(--bg-card,#fff)}
+    .batch-panel .resume-details summary{padding:14px 18px;color:var(--text-primary,#093a3e);font-weight:600}
+    .batch-panel .card-narrative{color:var(--text-primary,#093a3e);line-height:1.6}
+  `;
+  doc.querySelectorAll('script[data-builder-batches]').forEach(s => s.remove());
+  const script = doc.createElement('script');
+  script.setAttribute('data-builder-batches', '1');
+  script.textContent = `function selectPresentationBatch(n){
+    if(!document.querySelector('[data-builder-batch="'+n+'"]'))return;
+    document.querySelectorAll('[data-builder-batch]').forEach(p=>{var active=Number(p.dataset.builderBatch)===Number(n);p.dataset.builderBatchHidden=String(!active);p.classList.toggle('hidden',!active);p.classList.toggle('active',active)});
+    document.querySelectorAll('.batch-btn,.batch-tab').forEach(b=>{var active=Number(b.dataset.batch)===Number(n);b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active))});
+  }
+  function openPresentationBatch(){var m=location.hash.match(/^#batch-?(\\d+)$/);var n=m&&document.querySelector('[data-builder-batch="'+Number(m[1])+'"]')?Number(m[1]):${latest};selectPresentationBatch(n)}
+  openPresentationBatch();window.addEventListener('DOMContentLoaded',openPresentationBatch);window.addEventListener('hashchange',openPresentationBatch);`;
+  doc.body.appendChild(script);
+}
+
+function validatePresentationStructure(html, v, rows) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const issues = [];
+  const panel = doc.getElementById('batch-' + v.batchNumber) || doc.getElementById('batch' + v.batchNumber);
+  const cards = panel ? presentationCards(panel) : [];
+  if (cards.length !== rows.length) issues.push('The selected batch does not contain the expected number of candidates.');
+  const seen = new Set();
+  doc.querySelectorAll('[id]').forEach(el => { if (seen.has(el.id)) issues.push('Duplicate page ID: ' + el.id + '.'); seen.add(el.id); });
+  if (doc.querySelector('.advisor-name')?.textContent.trim() !== ADVISORS[v.advisor]?.name) issues.push('The page advisor does not match the selected advisor.');
+  const panels = doc.querySelectorAll('.batch-panel');
+  if (doc.querySelectorAll('.batch-btn, .batch-tab').length !== panels.length) issues.push('Batch buttons and panels do not match.');
+  if (panel && !panel.querySelector('.comparison-table')) issues.push('The selected batch has no comparison table.');
+  cards.forEach((card, index) => {
+    const candidate = rows[index];
+    if (!candidate) return;
+    if (!card.querySelector('details.cv, details.resume-details')) issues.push(candidate.name + ': résumé dropdown is missing.');
+    const spec = candidateVideoSpec(candidate.videoLink);
+    if (spec && spec.type !== 'unsupported' && !card.querySelector('.candidate-video video, .candidate-video iframe, .candidate-video audio')) issues.push(candidate.name + ': inline introduction is missing.');
+    if (candidate.resumeLink && candidate.resumeData?._sourceWarning) issues.push(candidate.name + ': résumé could not be read. Retry or correct the link before publishing.');
+  });
+  return [...new Set(issues)];
+
 }
 
 function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
@@ -3945,6 +4132,7 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
     const legacyBatchNum = doc.querySelector('.batch-num');
     if (legacyBatchNum) legacyBatchNum.textContent = `Batches 1-${batchN}`;
 
+    finalizeMergedPresentation(doc, v);
     return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
   }
 
@@ -4097,6 +4285,7 @@ function mergeBatchIntoExisting(existingHTML, newCandidates, v) {
   const batchNum = doc.querySelector('.batch-num');
   if (batchNum) batchNum.textContent = `Batches 1-${batchN}`;
 
+  finalizeMergedPresentation(doc, v);
   return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 }
 
@@ -4168,8 +4357,9 @@ function adaptBatchToPageFormat(doc, newPanel, newCandidates, v) {
     const video = shareableVideo(card, c);
     // Prefer the card's own narrative text: it carries any preview edits the TA made.
     const note = (card.querySelector('.card-narrative')?.textContent || '').trim() || (c.recruiterNote || '').trim();
-    card.querySelectorAll('section.candidate-video').forEach(x => x.remove());
-    card.querySelectorAll('details.resume-details, details.cv').forEach(x => x.remove());
+    // Preserve working media and resumes when adapting the visual shell.
+    const mediaHTML = Array.from(card.querySelectorAll('.candidate-video')).map(x => x.outerHTML).join('');
+    const resumeHTML = Array.from(card.querySelectorAll('details.resume-details, details.cv')).map(x => x.outerHTML).join('');
 
     if (isBook) {
       wrapper.className = 'candidate-card';
@@ -4197,15 +4387,10 @@ function adaptBatchToPageFormat(doc, newPanel, newCandidates, v) {
           while (holder.firstChild) actions.parentNode.insertBefore(holder.firstChild, actions);
         }
       }
-      if (video && !Array.from(actions.querySelectorAll('a')).some(a => (a.getAttribute('href') || '') === video.url)) {
+      if (video && !mediaHTML && !Array.from(actions.querySelectorAll('a')).some(a => (a.getAttribute('href') || '') === video.url)) {
         actions.insertAdjacentHTML('afterbegin', '<a class="video-intro-btn" href="' + escHTML(video.url) + '" target="_blank" rel="noopener">' + PLAY_SVG + video.label + '</a>');
       }
-      if (!actions.querySelector('a')) actions.remove();
-      const narrative = card.querySelector('.card-narrative');
-      if (narrative) narrative.remove();
-      if (note && !card.querySelector('.card-recruiter-note')) {
-        card.insertAdjacentHTML('beforeend', '<div class="card-footer"><div class="card-recruiter-note"><div class="recruiter-note-title">Recruiter Note</div><p>' + escHTML(note) + '</p></div></div>');
-      }
+      if (!actions.children.length) actions.remove();
       card.id = 'candidate-' + nextId;
       nextId += 1;
       cardCount += 1;
@@ -4231,8 +4416,8 @@ function adaptBatchToPageFormat(doc, newPanel, newCandidates, v) {
         (tags ? '<div class="card-section-title">Core Competencies</div><div class="tags">' + tags + '</div>' : '') +
         '<div class="card-section-title">' + escHTML(fitTitle) + '</div><div class="fit-grid">' + fits + '</div>' +
         (bars ? '<div class="card-section-title">Strength Profile</div><div class="strength-grid">' + bars + '</div>' : '') +
-        videoLink +
-        (note ? '<div class="recruiter-note"><div class="recruiter-note-label">Recruiter Note</div><p>' + escHTML(note) + '</p></div>' : '') +
+        (note ? '<p class="card-narrative">' + escHTML(capGeneratedWords(note, 70)) + '</p>' : '<p class="card-narrative"></p>') +
+        (mediaHTML || videoLink) + resumeHTML +
         '</div></div>';
     }
   });
@@ -4324,7 +4509,8 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-09-21.1';
+const BUILDER_BUILD_STAMP = '2026-10-06.1';
+document.getElementById('builderVersion').textContent = 'Build ' + BUILDER_BUILD_STAMP;
 // Deploy-time hard stop: a stale tab may not publish. A network hiccup during the
 // check never blocks a deploy; only a confirmed version mismatch does.
 async function assertBuilderFresh() {
