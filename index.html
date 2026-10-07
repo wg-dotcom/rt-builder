@@ -519,6 +519,13 @@ const JESUS_VISIBLE_TEXT_VOICE = `Write every visible, generated sentence in Jes
 - Facts do the selling: years, tools, scope, ownership, outcomes, industries, and real constraints.
 - Be confident. Do not hide uncertainty or invent proof.
 - Do not stack adjectives. Do not repeat the same point in different words.
+- Every sentence must add a relevant fact, a supported judgment, an honest limit, or a next step. Cut sentences that could describe any candidate.
+- Do not add deliberate typos, roughness, rambling, or a punchline. Vary sentence length naturally. Differentiate people through facts, not forced opening words.
+- Never claim Jesus personally screened, met, verified, or watched a candidate unless the supplied record confirms it. Do not present yourself as a human who did that work.
+- Do not promise minimal training, immediate results, availability, or perfect fit. Keep uncertainty when it changes the decision.
+- Do not repeat the introduction in the fit points. Use fewer points when the evidence is thin. Never pad to meet a minimum length.
+- Avoid these sales patterns: same muscle, not résumé keywords, it's Tuesday, hit the ground running, no ramp-up, minimal ramp-up, from day one, no hand-holding, quiet competence, powerhouse, game changer, unicorn, that's not X that's Y.
+- Use member for Sagan's accounts. Preserve source quotes, CV records, job titles, dates, and approved biographies. This is a writing standard, not an AI detector.
 - Never use: ideal candidate, strong candidate, detail-oriented, quality-control mindset, essential, exciting opportunity, dynamic team, fast-paced environment, team player, excellent communication skills, passionate about, extensive experience, well-versed, seasoned professional, proven track record, leveraging, synergy, best-in-class, adept at, comprehensive background, brings a wealth of, well-positioned, seamlessly, robust, stands out, or exactly what this role demands.
 - No hype, corporate filler, fake enthusiasm, stock metaphors, forced slang, or em dashes.`;
 const JESUS_COPY_FAILURE_PATTERNS = [
@@ -531,7 +538,10 @@ const JESUS_COPY_FAILURE_PATTERNS = [
   /\bproven track record\b/i, /\b(?:leveraging|synergy|best[- ]in[- ]class|adept at)\b/i,
   /\bcomprehensive background\b/i, /\bbrings? a wealth of\b/i,
   /\bwell[- ]positioned\b/i, /\bseamlessly\b/i, /\brobust\b/i,
-  /\bstands? out\b/i, /\bexactly what this role demands\b/i, /—/
+  /\bstands? out\b/i, /\bexactly what this role demands\b/i, /—/,
+  /\b(?:same muscle|hit the ground running|(?:no|minimal|zero) ramp[- ]?up|from day one|no hand[- ]holding|quiet(?:ly)? competen(?:ce|t)|powerhouse|game[- ]changer|unicorn)\b/i,
+  /\bnot (?:just )?(?:a line (?:item|on)|r[eé]sum[eé] keywords)\b/i,
+  /\b(?:it['’]s Tuesday|adult in the room|Swiss Army knife|sommelier flair)\b/i
 ];
 function visibleCopyMissesJesusVoice(value) {
   return JESUS_COPY_FAILURE_PATTERNS.some(pattern => pattern.test(String(value || '')));
@@ -2341,12 +2351,12 @@ function buildPresentationHTML() {
     </div>
   </section>
 
-  <section class="editorial fade-in" aria-label="What matters for this role">
+  ${shortlistPriorities(v).length ? `<section class="editorial fade-in" aria-label="What matters for this role">
     <div class="editorial-label">What matters for this hire</div>
     <div class="editorial-text fit-strip-grid">
       ${shortlistPriorities(v).map((item, index) => `<div class="priority-item"><span>${String(index + 1).padStart(2, '0')}</span><p>${escHTML(item)}</p></div>`).join('')}
     </div>
-  </section>
+  </section>` : ''}
 
   <section class="candidates-section">
     <div class="candidates-header fade-in">
@@ -2404,7 +2414,7 @@ function buildPresentationHTML() {
 
   <section class="footer-cta fade-in">
     <h2>Ready to <strong>meet your next ${escHTML(v.roleTitle)}?</strong></h2>
-    <p>Tell us who you want to interview and we'll set it up within 24 hours.</p>
+    <p>Tell us who you want to meet. We'll confirm availability and arrange the interviews.</p>
     <a class="footer-contact" href="mailto:${escHTML(advisor.email || 'jesus.p@getsagan.com')}">Schedule Next Steps</a>
   </section>
 
@@ -2468,14 +2478,8 @@ function buildPresentationHTML() {
 
 function shortlistPriorities(v) {
   const source = String(v.contextNotes || '');
-  let items = source.split(/\n+|(?<=[.!?])\s+/).map(s => s.replace(/^[-•*\d.)\s]+/, '').trim()).filter(s => s.length > 18);
-  const defaults = [
-    `Do the core ${v.roleTitle || 'role'} work without a long runway.`,
-    'Communicate clearly with a U.S. team and own the follow-through.',
-    'Use the right tools, show the evidence, and keep the work moving.',
-    'Fit the schedule and compensation without surprises later.'
-  ];
-  return items.slice(0, 4).concat(defaults).slice(0, 4);
+  const items = source.split(/\n+|(?<=[.!?])\s+/).map(s => s.replace(/^[-•*\d.)\s]+/, '').trim()).filter(s => s.length > 18);
+  return [...new Set(items)].slice(0, 4);
 }
 function buildEmbeddedResume(c) {
   const data = c.resumeData || {};
@@ -2556,13 +2560,17 @@ function generateCandidateCard(c, idx, v) {
   const expEntries = c.resumeData?.experience?.length ? c.resumeData.experience.slice(0, 4)
     : (c.resumeData?.projects || []).slice(0, 4).map(p => ({ role: p.name, industry: 'Independent project', dates: p.stack, description: p.description }));
 
-  // Fit indicators: prefer AI-generated client-specific bullets, fallback to summary splitting
+  // Only show additional evidence. Repeating the introduction adds no value.
   const strengthBullets = (() => {
-    if (c.fitIndicators && c.fitIndicators.length > 0) return c.fitIndicators.slice(0, 5);
-    if (!c.summary) return [];
-    let bullets = c.summary.split('\n').filter(s => s.trim());
-    if (bullets.length <= 1) bullets = c.summary.split(/(?<=\.)\s+/).filter(s => s.trim() && s.length > 10);
-    return bullets.slice(0, 5).map(s => s.replace(/^[-•*]\s*/, '').trim());
+    const normalize = text => String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const intro = normalize(c.recruiterNote);
+    const seen = new Set();
+    return (Array.isArray(c.fitIndicators) ? c.fitIndicators : []).filter(point => {
+      const key = normalize(point);
+      if (!key || intro.includes(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 2);
   })();
 
   // Strength bars: prefer AI-generated contextual scores, fallback to position-based
@@ -3569,24 +3577,9 @@ async function generateAINotes() {
 
       const prompt = `${JESUS_VISIBLE_TEXT_VOICE}
 
-You are a Talent Advisor at Sagan Recruitment. Your job: make the customer feel why this person fits, not just list qualifications. Write like Jesus Pacheco selling the candidate in a real conversation after one clean edit.
+Write a candidate introduction for the member. Use Jesus's voice as specified above. Do not invent a personal relationship with the candidate.
 
-WHO YOU ARE: MIT Supply Chain master's. Telecom engineer from Venezuela. Based in Mendoza, Argentina. You think in systems, sell with stories, and write like you talk. You are NOT an AI. You are a real person who has vetted this candidate personally.
-
-YOUR WRITING DNA:
-- Write with contractions: they're, doesn't, won't, it's. "Do not" and "they are" in prose sound like a robot filling a form.
-- Short sentences. One idea per sentence. If a sentence stacks three clauses, break it in two.
-- NEVER use em dashes (—) as connectors. Use periods, commas, or colons instead.
-- NEVER use: "leveraging", "synergy", "best-in-class", "proven track record", "dynamic", "passionate about", "extensive experience", "well-versed", "seasoned professional", "boasts", "adept at", "specifically and concretely", "exactly what this role demands", "force multiplier", "operator mindset", "sleep easy at night", "the adult in the room", "Swiss Army knife". These words = instant delete.
-- NO canned labels or stock metaphors. The facts do the selling: what they did, the number that proves it, what that means for this client.
-- Lead with SPECIFICS: tool names, years, certifications, numbers.
-- Be honest about trade-offs. Clients trust you because you don't sugarcoat.
-- Mirror the CLIENT'S language. If they say "tickets", you say "tickets". If they say "onboarding", you say "onboarding".
-- Use precise verbs, clean transitions, and calm confidence. Make the writing feel considered without making it formal.
-- Keep one understated, plain-spoken line. That is enough personality. Do not use forced slang or theatrical sales language.
-
-GOLD STANDARD (this is the exact register every candidate intro should hit — study the rhythm, the contractions, how facts carry the argument, and the plain-spoken ending):
-"Sam has spent sixteen years one seat away from the CFO. They built the board packages themselves, ran full budget and reforecast cycles, and led a remote FP&A team for three years as Finance Director. So they can build the model and also run the meeting where the model gets questioned. Their 3-statement scenario modeling is the same muscle this role needs for growth planning. They've presented to program managers at a multilateral and regional leads at a global bank, so explaining numbers to people outside finance doesn't scare them."
+The introduction should explain why the supplied experience is relevant to this job. Be specific about the work, the scale, and the result when the source gives one. Keep a material question if it changes the hiring decision. Do not turn transferable experience into proof of work the candidate has not done.
 
 CLIENT: ${v.clientName} | Role: ${v.roleTitle} | Budget: ${v.salaryRange || '?'} | Schedule: ${v.schedule || 'Full-time, US hours'}
 Pain points & context: ${v.contextNotes || 'Not provided'}
@@ -3606,34 +3599,11 @@ ${c.summary ? 'Raw notes: ' + c.summary.slice(0, 1500) : ''}
 ${c.resumeData?.experience?.length ? 'VERIFIED RESUME DATA (use ONLY these facts for job history):\n' + c.resumeData.experience.map(e => `- ${e.role}${e.industry ? ' in ' + e.industry : ''}${e.dates ? ' (' + e.dates + ')' : ''}${e.description ? ':\n  ' + e.description.slice(0, 1200) : ''}`).join('\n') : c.resumeData?.projects?.length ? 'VERIFIED PROJECTS (the resume has no formal work history — this is a project-based, entry-level profile. Present these projects as the experience. NEVER describe the experience as "unverified"; call it project-based and judge the trajectory honestly):\n' + c.resumeData.projects.map(p => `- ${p.name}${p.stack ? ' [' + p.stack + ']' : ''}${p.description ? ':\n  ' + p.description.slice(0, 800) : ''}`).join('\n') : 'NOTE: Resume could not be accessed. Use ONLY the spreadsheet info above. Do NOT invent job titles or companies.'}
 ${c.resumeData?.skillCategories?.length ? 'VERIFIED SKILLS: ' + c.resumeData.skillCategories.map(sc => sc.skills).join(', ') : ''}
 
-EXAMPLE OF EXACTLY WHAT I WANT (study the rhythm, specificity, and sommelier flair):
+Each candidate's introduction must add something specific to that candidate. Similar facts may use similar words. Do not force a unique persona, opening, slogan, or closing line.
 
-Example 1 (DIS - Technical Client Liaison):
-Why bullets:
-- Heavily certified Microsoft specialist: AZ-900, MS-900, AZ-104 in progress. Service Desk Engineer at an MSP right now.
-- Lives in the exact DIS environment: remote ticket management, M365 admin, Active Directory troubleshooting daily.
-- Handles 50+ tickets/week. The bread-and-butter issues eating your senior engineers' time.
-Note: "Menard already lives in DIS's world. Four years in MSPs, 50+ tickets a week, and they know M365 and Active Directory cold. Minimal ramp-up. The pick if you want someone quietly competent from day one."
+KEEP IT TIGHT: "why" = up to 3 short factual bullets separated by \n. "note" = 2-4 natural sentences. Never exceed 70 words. No minimum word count. This is the only introduction shown on the card. Keep only the facts and judgment needed to decide whether to interview. No separate recruiter note.
 
-Example 2 (Wingz - Operations Coordinator):
-Why bullets:
-- 6 years in high-volume logistics ops. Managed 200+ daily ride requests at a transportation company.
-- Built SOPs from scratch for a 40-person dispatch team. Thinks in systems, not tasks.
-- HubSpot + Zendesk power user. Already speaks the tools Wingz runs on.
-Note: "Andrea doesn't wait for instructions, they build the playbook. At their current company they cut response times 40% by redesigning the dispatch workflow on their own. Hand them a messy process and check back in a month."
-
-DIFFERENTIATION RULE: Each candidate MUST have a unique angle. NEVER reuse a phrase, label, or opener across candidates in the same batch. If one note opens with years of experience, the next one opens somewhere else.
-
-ALWAYS SELL, NEVER SNIPE: The note exists to highlight the candidate. Every sentence must make the reader want to interview them. NEVER end on a line that could read as sarcasm, doubt, or criticism of the candidate (e.g. "Twenty years is a long time to still be learning the basics."). A rough edge is a candid FACT (a gap, a stretch, a tradeoff) stated plainly, never a jab at the person. If a closing line could be read two ways, rewrite it so it can only be read as a strength.
-${candidates.slice(0, i).filter(prev => prev.recruiterNote).length ? `
-ALREADY WRITTEN INTRODUCTIONS (DO NOT repeat these phrases, angles, or openers):
-${candidates.slice(0, i).filter(prev => prev.recruiterNote).map(prev => `- ${prev.name}: "${prev.recruiterNote}"`).join('\n')}
-
-You MUST use a different angle and opening word from every introduction above.` : ''}
-
-KEEP IT TIGHT: "why" = exactly 3-5 SHORT bullets separated by \\n. Each bullet is ONE line, max 15 words. Start with a specific fact (tool, number, cert). "note" = 3-5 short sentences and 45-70 words. Never exceed 70 words. This is the only candidate intro shown on the card. Explain why this candidate fits this role. Use facts. No rambling. No filler. Do not label it as a recruiter note.
-
-"fitIndicators" = exactly 3 bullets. Each connects a SPECIFIC candidate skill/experience to a SPECIFIC client pain point or need from the client website/context. Format: "[Candidate fact] → [Why it matters for THIS client]". These appear as client-specific fit indicators on the card.
+"fitIndicators" = up to 2 additional, evidence-based points connecting experience to a stated role requirement. Write ordinary sentences without arrows. Do not repeat the note or the why bullets. Return [] if there is nothing useful to add.
 
 "strengthScores" = object mapping 6 skill names to scores (0-100). Scores must be CONTEXTUAL: how strong is this candidate at each skill relative to what THIS role requires? A 95 means near-perfect match. A 70 means adequate. Be honest. Not everyone is 90+.
 
@@ -3642,7 +3612,7 @@ CRITICAL: ONLY reference facts that appear in the VERIFIED RESUME DATA or spread
 Return ONLY valid JSON. No markdown fences. No explanation before or after.
 - "jobs" field: Copy ONLY from VERIFIED RESUME DATA above. Each job has "role", "industry" (the employer's sector, NOT the company name), and "dates" exactly as written. If no verified data, return empty array []. NEVER invent jobs.
 PRONOUN CHECK: Your output must not contain he, she, him, his, her, hers, himself, or herself.
-{"why":"AZ-900 and MS-900 certified\\nHandles 50+ tickets each week\\nWorks daily in M365 and Active Directory","note":"Menard already works in the same technical environment this role needs. Four years in MSP support and 50+ weekly tickets show the pace is familiar. M365 and Active Directory are daily tools, not résumé keywords. Minimal ramp-up. Quietly competent from day one.","experience":"4 yrs IT Support","skills":"Azure, M365, ServiceNow, Active Directory, PowerShell, ITIL","fitIndicators":["AZ-900 + MS-900 certified → Ready for the core Microsoft stack","50+ tickets/week → Comfortable with the required support volume","4.8/5 client score → Strong client communication"],"strengthScores":{"Azure":92,"M365 Admin":95,"ServiceNow":85,"Active Directory":88,"Client Communication":90,"ITIL Process":78},"jobs":[{"role":"Service Desk Engineer","industry":"IT Services"},{"role":"IT Support Specialist","industry":"Technology"}]}
+{"why":"Short factual point from the supplied record","note":"A short introduction based only on the supplied record.","experience":"Use supplied experience label","skills":"Use supplied tools","fitIndicators":[],"strengthScores":{},"jobs":[]}
 
 IMPORTANT: The example above is just a FORMAT reference. Write COMPLETELY NEW content specific to THIS candidate (${c.name}). Use their actual skills, experience, and background. Do NOT copy the example text.`;
 
@@ -3803,8 +3773,8 @@ function runPublishAudit(html, v) {
   if (brokenBtns.length) issues.push(`${brokenBtns.length} broken video/portfolio button(s): ${brokenBtns.slice(0, 3).join(', ')}${brokenBtns.length > 3 ? '…' : ''}`);
 
   const recruiterNotes = doc.querySelectorAll('.card-recruiter-note, .recruiter-note-title');
-  if (recruiterNotes.length || /\bRecruiter Note\b/i.test(body)) issues.push('Recruiter notes are visible. Keep only one client-ready introduction on each candidate card.');
-  const voiceFailures = Array.from(doc.querySelectorAll('.card-narrative, .fit-label, .best-tag'))
+  if (recruiterNotes.length || /\bRecruiter Note\b/i.test(body)) issues.push('Recruiter notes are visible. Keep only one member-ready introduction on each candidate card.');
+  const voiceFailures = Array.from(doc.querySelectorAll('.card-narrative, .fit-label, .best-tag, .hero-sub, .footer-cta p'))
     .filter(element => visibleCopyMissesJesusVoice(element.textContent || ''));
   if (voiceFailures.length) issues.push(`${voiceFailures.length} generated text field(s) missed Jesus’s voice standard`);
   const introProblems = Array.from(doc.querySelectorAll('.candidate-card')).filter(card => card.querySelectorAll('.card-narrative').length !== 1);
@@ -4509,7 +4479,7 @@ function isDarkColor(hex) {
 
 // Stale-version guard: TAs keep builder tabs open for days, so fixes never reach them and
 // they report already-fixed bugs. Compare our build stamp against the served page and nag.
-const BUILDER_BUILD_STAMP = '2026-10-06.1';
+const BUILDER_BUILD_STAMP = '2026-10-07.2';
 document.getElementById('builderVersion').textContent = 'Build ' + BUILDER_BUILD_STAMP;
 // Deploy-time hard stop: a stale tab may not publish. A network hiccup during the
 // check never blocks a deploy; only a confirmed version mismatch does.

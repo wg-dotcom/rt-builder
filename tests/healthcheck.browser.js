@@ -6,6 +6,16 @@
   }
   const assert = (value, why) => { if (!value) throw new Error(why || 'Assertion failed'); };
   const parse = html => new DOMParser().parseFromString(html, 'text/html');
+  check('Voice rejects forced punchlines and unsupported promises',()=>{
+    for(const text of ['The same muscle.','No ramp-up needed.','Ready from day one.','No hand-holding.','It’s Tuesday.','A powerhouse.']) assert(visibleCopyMissesJesusVoice(text),text);
+    assert(!visibleCopyMissesJesusVoice('Alex reconciled 18 bank accounts each month.'));
+  });
+  check('Missing role context does not create filler priorities',()=>assert(shortlistPriorities({}).length===0));
+  check('Fit points do not copy the introduction',()=>{
+    const d=parse(generateCandidateCard({name:'Alex',recruiterNote:'Alex reconciled 18 bank accounts each month.',fitIndicators:['Alex reconciled 18 bank accounts each month.','Wrote the monthly close checklist.','Wrote the monthly close checklist.']},0,{}));
+    assert(d.querySelectorAll('.fit-label').length===1);
+    assert(d.querySelector('.fit-label').textContent==='Wrote the monthly close checklist.');
+  });
   const row = name => ({ name, salary:'2500', location:'Test location', experience:'5 years', skills:'Excel, SQL',
     resumeLink:'https://example.invalid/cv.pdf', videoLink:'https://drive.google.com/file/d/synthetic_video_id/view',
     recruiterNote:name.split(' ')[0] + ' reconciles financial records and builds monthly reports.',
